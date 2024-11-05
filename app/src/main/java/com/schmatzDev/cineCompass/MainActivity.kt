@@ -10,18 +10,20 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
-import com.schmatzDev.cineCompass.screen.auth.AuthScreen
+import androidx.navigation.compose.rememberNavController
 import com.schmatzDev.cineCompass.ui.theme.CineCompassTheme
 
 class MainActivity : ComponentActivity() {
     private val authViewModel: AuthViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             CineCompassTheme {
-                AuthScreen(authViewModel)
+                val navController = rememberNavController()
+                CineCompassNavigation(navController = navController, viewModel = authViewModel)
             }
         }
     }

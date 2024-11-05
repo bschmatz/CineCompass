@@ -15,6 +15,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -27,7 +28,7 @@ import androidx.compose.runtime.setValue
 
 
 @Composable
-fun AuthScreen(viewModel: AuthViewModel) {
+fun AuthScreen(viewModel: AuthViewModel, onAuthSuccess: () -> Unit) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var isRegistering by remember { mutableStateOf(false) }
@@ -53,12 +54,8 @@ fun AuthScreen(viewModel: AuthViewModel) {
                 CircularProgressIndicator()
             }
             is AuthState.Authenticated -> {
-                Text("Welcome back, ${(authState as AuthState.Authenticated).user.email}")
-                Button(
-                    onClick = { viewModel.signOut() },
-                    modifier = Modifier.padding(top = 16.dp)
-                ) {
-                    Text("Sign Out")
+                LaunchedEffect(Unit) {
+                    onAuthSuccess()
                 }
             }
             else -> {
