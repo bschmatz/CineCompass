@@ -1,7 +1,5 @@
+from app.database.init_db import Base
 from sqlalchemy import Column, Integer, String, Float, JSON, Text, DateTime
-from sqlalchemy.ext.declarative import declarative_base
-
-Base = declarative_base()
 
 class Movie(Base):
     __tablename__ = 'movies'

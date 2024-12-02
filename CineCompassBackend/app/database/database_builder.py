@@ -3,7 +3,6 @@ import requests
 from typing import List, Set, Optional
 import os
 from dotenv import load_dotenv
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime
 import time
 import logging
@@ -11,7 +10,6 @@ from app.database.init_db import init_db
 from app.models.movie import Movie
 
 load_dotenv()
-Base = declarative_base()
 
 class CineCompassDatabaseBuilder:
     def __init__(self):
