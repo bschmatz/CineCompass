@@ -22,5 +22,16 @@ var/
 .venv
 venv/
 ENV/
+CineCompassBackend/app/database/movies.db
+
+*.iml
+.gradle
+/local.properties
 .idea/
-.vscode/
+.idea/**
+.DS_Store
+/build
+/captures
+.externalNativeBuild
+.cxx
+local.properties
