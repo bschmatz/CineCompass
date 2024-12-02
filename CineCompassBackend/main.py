@@ -14,6 +14,3 @@ app.add_middleware(
 )
 
 app.include_router(endpoints.router)
-
-if __name__ == "__main__":
-    uvicorn.run(app, host="localhost", port=8000)
