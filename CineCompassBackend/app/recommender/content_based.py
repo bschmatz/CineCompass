@@ -3,9 +3,12 @@ import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Tuple
-from app.database.database_builder import Movie
-from app.database.init_db import init_db
+from datetime import datetime
 import logging
+from app.models.movie import Movie
+from app.models.cached_recommendation import CachedRecommendation
+from app.database.init_db import init_db
+from app.schemas.recommendation import RecommendationResponse
 
 
 class CineCompassRecommender:
@@ -52,7 +55,58 @@ class CineCompassRecommender:
             self.logger.error(f"Error in load_data_from_db: {str(e)}")
             raise
 
-    def get_recommendations(self, user_ratings: List[Tuple[int, float]]) -> List[dict]:
+    def get_cached_recommendations(self, user_id: int, page: int = 1, page_size: int = 10) -> RecommendationResponse:
+        with self.Session() as session:
+            total = session.query(CachedRecommendation) \
+                .filter(CachedRecommendation.user_id == user_id) \
+                .count()
+
+            cached_recommendations = session.query(CachedRecommendation) \
+                .filter(CachedRecommendation.user_id == user_id) \
+                .order_by(CachedRecommendation.similarity_score.desc()) \
+                .offset((page - 1) * page_size) \
+                .limit(page_size) \
+                .all()
+
+            items = [
+                {
+                    "id": rec.movie_id,
+                    "similarity_score": rec.similarity_score,
+                    **rec.details
+                }
+                for rec in cached_recommendations
+            ]
+
+            return RecommendationResponse(
+                items=items,
+                total=total,
+                page=page,
+                page_size=page_size
+            )
+
+    def cache_recommendations(self, user_id: int, recommendations: List[dict]):
+        with self.Session() as session:
+            session.query(CachedRecommendation) \
+                .filter(CachedRecommendation.user_id == user_id) \
+                .delete()
+
+            for rec in recommendations:
+                cached_rec = CachedRecommendation(
+                    user_id=user_id,
+                    movie_id=rec["id"],
+                    similarity_score=rec["similarity_score"],
+                    details={
+                        "title": rec["title"],
+                        "genres": rec["genres"],
+                        "cast": rec["cast"],
+                        "director": rec["director"]
+                    }
+                )
+                session.add(cached_rec)
+
+            session.commit()
+
+    def calculate_recommendations(self, user_ratings: List[Tuple[int, float]]) -> List[dict]:
         try:
             self.logger.info(f"Getting recommendations for {len(user_ratings)} user ratings")
 
@@ -65,10 +119,10 @@ class CineCompassRecommender:
             for movie_id, rating in user_ratings:
                 try:
                     movie_idx = self.movies_df[self.movies_df["id"] == movie_id].index[0]
-                    user_profile += self.tfidf_matrix[movie_idx].toarray()[0] * (rating / 5.0)
                 except IndexError:
                     self.logger.warning(f"Movie ID {movie_id} not found in database")
                     continue
+                user_profile += self.tfidf_matrix[movie_idx].toarray()[0] * (rating / 5.0)
 
             self.logger.info("Calculating similarities")
             similarities = cosine_similarity(
@@ -77,15 +131,15 @@ class CineCompassRecommender:
             )[0]
 
             self.logger.info("Finding rated movie indices")
-            rated_movie_indices = [
-                self.movies_df[self.movies_df["id"] == movie_id].index[0]
-                for movie_id, _ in user_ratings
-                if not self.movies_df[self.movies_df["id"] == movie_id].empty
-            ]
+            rated_movie_indices = []
+            for movie_id, _ in user_ratings:
+                movie_indices = self.movies_df[self.movies_df["id"] == movie_id].index
+                if not movie_indices.empty:
+                    rated_movie_indices.append(movie_indices[0])
 
             self.logger.info("Sorting and filtering recommendations")
             movie_indices = np.argsort(similarities)[::-1]
-            movie_indices = [idx for idx in movie_indices if idx not in rated_movie_indices][:10]
+            movie_indices = [idx for idx in movie_indices if idx not in rated_movie_indices]
 
             self.logger.info("Building recommendation list")
             recommendations = []
@@ -100,7 +154,29 @@ class CineCompassRecommender:
                     "director": movie["details"]["director"]
                 })
 
-            self.logger.info(f"Returning {len(recommendations)} recommendations")
+            return recommendations
+
+        except Exception as e:
+            self.logger.error(f"Error in calculate_recommendations: {str(e)}")
+            raise
+
+    def get_recommendations(self, user_id: int, user_ratings: List[Tuple[int, float]], force_refresh: bool = False) -> \
+    List[dict]:
+        try:
+            if not force_refresh:
+                with self.Session() as session:
+                    cached = session.query(CachedRecommendation) \
+                        .filter(CachedRecommendation.user_id == user_id) \
+                        .first()
+
+                    if cached and (datetime.utcnow() - cached.created_at).days < 1:
+                        self.logger.info("Using cached recommendations")
+                        return self.get_cached_recommendations(user_id)
+
+            recommendations = self.calculate_recommendations(user_ratings)
+
+            self.cache_recommendations(user_id, recommendations)
+
             return recommendations
 
         except Exception as e:

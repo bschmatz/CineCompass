@@ -97,9 +97,7 @@ class CineCompassDatabaseBuilder:
             return None
 
     @staticmethod
-    def create_combined_features(title: str, overview: str, genres: List[str],
-                                 cast: List[str], director: str) -> str:
-        """Create combined features string for TF-IDF"""
+    def create_combined_features(title: str, overview: str, genres: List[str],cast: List[str], director: str) -> str:
         return f"{title} {overview} {' '.join(genres)} {' '.join(cast)} {director}"
 
     def process_movies_batch(self, movies: List[dict], batch_size: int = 10) -> int:

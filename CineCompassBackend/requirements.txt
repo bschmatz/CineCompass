@@ -11,3 +11,6 @@ numpy==1.26.2
 requests==2.32.3
 sqlalchemy==2.0.36
 psycopg2-binary==2.9.10
+python-jose[cryptography]==3.3.0
+passlib==1.7.4
+bcrypt==4.2.1
