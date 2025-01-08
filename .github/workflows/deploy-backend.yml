@@ -1,6 +1,6 @@
 name: Deploy Backend to DigitalOcean
 on:
-  pull_request: # change to push after testing
+  push:
     branches: [ main ]
     paths:
       - 'CineCompassBackend/**'
