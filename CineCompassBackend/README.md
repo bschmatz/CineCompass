@@ -1,7 +1,7 @@
 # CineCompass Backend
 
 ## Requirements
-- Python 3.9 or higher
+- Python 3.9 or higher 
 
 ## Installation
 1. Clone the repository
