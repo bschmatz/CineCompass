@@ -35,3 +35,4 @@ CineCompassBackend/app/database/movies.db
 .externalNativeBuild
 .cxx
 local.properties
+**/.idea/
