@@ -97,11 +97,6 @@ async def populate_database(
         current_user: User = Depends(get_current_user),
         builder: CineCompassDatabaseBuilder = Depends(get_builder)
 ):
-    if not current_user.is_admin:
-        raise HTTPException(
-            status_code=403,
-            detail="Only administrators can populate the database"
-        )
 
     try:
         builder.populate_database(target_size=target_size)
