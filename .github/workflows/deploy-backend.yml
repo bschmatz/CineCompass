@@ -36,6 +36,8 @@ jobs:
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/cinecompass-backend:latest
             docker stop backend-container || true
             docker rm backend-container || true
-            echo "TMDB_ACCESS_TOKEN=${{ secrets.TMDB_ACCESS_TOKEN }}" > /root/api/.env
-            echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> /root/api/.env
+            mkdir -p /root/api && cd /root/api
+            rm -rf .env
+            echo "TMDB_ACCESS_TOKEN=${{ secrets.TMDB_ACCESS_TOKEN }}" > .env
+            echo "JWT_SECRET_KEY=${{ secrets.JWT_SECRET_KEY }}" >> .env
             docker run -d -p 8000:8000 --name backend-container -v /root/api/.env:/app/.env ${{ secrets.DOCKERHUB_USERNAME }}/cinecompass-backend:latest
