@@ -8,6 +8,9 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    environment:
+      name: Backend
+      url: "https://bschmatz.com/cinecompass/"
     defaults:
       run:
         working-directory: ./CineCompassBackend
