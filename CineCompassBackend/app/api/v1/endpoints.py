@@ -15,7 +15,7 @@ from app.schemas.recommendationRequest import RecommendationRequest
 router = APIRouter()
 jwt_handler = JWTHandler()
 
-@router.post("/")
+@router.get("/")
 async def root():
     return {"message": "CineCompass is running"}
 
