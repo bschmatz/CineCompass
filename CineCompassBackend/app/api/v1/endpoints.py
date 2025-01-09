@@ -66,7 +66,7 @@ def get_recommender():
     return recommender
 
 
-@router.post("/recommendations/", response_model=RecommendationResponse)
+@router.post("/recommendations", response_model=RecommendationResponse)
 async def get_recommendations(
         request: RecommendationRequest,
         current_user: User = Depends(get_current_user),
