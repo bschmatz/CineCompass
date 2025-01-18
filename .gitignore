@@ -20,6 +20,7 @@ var/
 *.egg
 .env
 .venv
+*-venv/
 venv/
 ENV/
 CineCompassBackend/app/database/movies.db

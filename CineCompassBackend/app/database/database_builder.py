@@ -157,7 +157,7 @@ class CineCompassDatabaseBuilder:
             return
 
         sources = ["popular", "top_rated", "now_playing"]
-        max_pages_per_source = 50
+        max_pages_per_source = 100
 
         for source in sources:
             if len(self.processed_movies) >= target_size:
