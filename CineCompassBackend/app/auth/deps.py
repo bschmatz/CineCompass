@@ -1,8 +1,8 @@
 from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database.init_db import init_db
-from app.auth.jwt_handler import JWTHandler
-from app.models.user import User
+from CineCompassBackend.app.database.init_db import init_db
+from CineCompassBackend.app.auth.jwt_handler import JWTHandler
+from CineCompassBackend.app.models.user import User
 
 jwt_handler = JWTHandler()
 

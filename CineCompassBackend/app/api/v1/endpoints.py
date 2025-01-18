@@ -1,16 +1,16 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.database.database_builder import CineCompassDatabaseBuilder
-from app.recommender.content_based import CineCompassRecommender
-from app.auth.deps import get_db, get_current_user
-from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, Token
-from app.schemas.recommendation import RecommendationResponse
-from app.auth.jwt_handler import JWTHandler
+from CineCompassBackend.app.database.database_builder import CineCompassDatabaseBuilder
+from CineCompassBackend.app.recommender.content_based import CineCompassRecommender
+from CineCompassBackend.app.auth.deps import get_db, get_current_user
+from CineCompassBackend.app.models.user import User
+from CineCompassBackend.app.schemas.auth import UserCreate, UserLogin, Token
+from CineCompassBackend.app.schemas.recommendation import RecommendationResponse
+from CineCompassBackend.app.auth.jwt_handler import JWTHandler
 from datetime import timedelta
 
-from app.schemas.recommendationRequest import RecommendationRequest
+from CineCompassBackend.app.schemas.recommendationRequest import RecommendationRequest
 
 router = APIRouter()
 jwt_handler = JWTHandler()
@@ -96,7 +96,7 @@ async def get_recommendations(
 
 @router.post("/admin/populate-database")
 async def populate_database(
-        target_size: int = 1000,
+        target_size: int = 5000,
         current_user: User = Depends(get_current_user),
         builder: CineCompassDatabaseBuilder = Depends(get_builder)
 ):

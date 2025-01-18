@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 from datetime import datetime
 import time
 import logging
-from app.database.init_db import init_db
-from app.models.movie import Movie
+from CineCompassBackend.app.database.init_db import init_db
+from CineCompassBackend.app.models.movie import Movie
 
 load_dotenv()
 
@@ -133,7 +133,9 @@ class CineCompassDatabaseBuilder:
                         popularity=movie_data.get("popularity", 0),
                         vote_average=movie_data.get("vote_average", 0),
                         last_updated=datetime.now(),
-                        combined_features=combined_features
+                        combined_features=combined_features,
+                        poster_path=movie_data.get("poster_path"),
+                        backdrop_path=movie_data.get("backdrop_path")
                     )
 
                     session.merge(movie)

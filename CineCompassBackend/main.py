@@ -1,6 +1,6 @@
 from fastapi import FastAPI, APIRouter
 from fastapi.middleware.cors import CORSMiddleware
-from app.api.v1 import endpoints
+from CineCompassBackend.app.api.v1 import endpoints
 import uvicorn
 
 app = FastAPI(title="CineCompass API")
