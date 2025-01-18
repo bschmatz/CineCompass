@@ -92,17 +92,3 @@ async def get_recommendations(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/admin/populate-database")
-async def populate_database(
-        target_size: int = 5000,
-        current_user: User = Depends(get_current_user),
-        builder: CineCompassDatabaseBuilder = Depends(get_builder)
-):
-
-    try:
-        builder.populate_database(target_size=target_size)
-        return {"message": "Database population completed"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
