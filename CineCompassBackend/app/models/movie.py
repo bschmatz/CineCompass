@@ -1,4 +1,4 @@
-from CineCompassBackend.app.database.init_db import Base
+from app.database.init_db import Base
 from sqlalchemy import Column, Integer, String, Float, JSON, Text, DateTime
 
 class Movie(Base):

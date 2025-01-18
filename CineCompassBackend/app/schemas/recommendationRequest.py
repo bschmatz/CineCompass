@@ -1,6 +1,6 @@
 from pydantic import BaseModel
 from typing import List
-from CineCompassBackend.app.models.rating import Rating
+from app.models.rating import Rating
 
 class RecommendationRequest(BaseModel):
     ratings: List[Rating]

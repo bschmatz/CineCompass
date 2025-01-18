@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, Float, JSON, ForeignKey, DateTime
-from CineCompassBackend.app.database.init_db import Base
+from app.database.init_db import Base
 from datetime import datetime
 
 

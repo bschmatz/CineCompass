@@ -5,10 +5,10 @@ from sklearn.metrics.pairwise import cosine_similarity
 from typing import List, Tuple
 from datetime import datetime
 import logging
-from CineCompassBackend.app.models.movie import Movie
-from CineCompassBackend.app.models.cached_recommendation import CachedRecommendation
-from CineCompassBackend.app.database.init_db import init_db
-from CineCompassBackend.app.schemas.recommendation import RecommendationResponse
+from app.models.movie import Movie
+from app.models.cached_recommendation import CachedRecommendation
+from app.database.init_db import init_db
+from app.schemas.recommendation import RecommendationResponse
 
 class CineCompassRecommender:
     def __init__(self):

@@ -1,16 +1,16 @@
 from typing import List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from CineCompassBackend.app.database.database_builder import CineCompassDatabaseBuilder
-from CineCompassBackend.app.recommender.content_based import CineCompassRecommender
-from CineCompassBackend.app.auth.deps import get_db, get_current_user
-from CineCompassBackend.app.models.user import User
-from CineCompassBackend.app.schemas.auth import UserCreate, UserLogin, Token
-from CineCompassBackend.app.schemas.recommendation import RecommendationResponse
-from CineCompassBackend.app.auth.jwt_handler import JWTHandler
+from app.database.database_builder import CineCompassDatabaseBuilder
+from app.recommender.content_based import CineCompassRecommender
+from app.auth.deps import get_db, get_current_user
+from app.models.user import User
+from app.schemas.auth import UserCreate, UserLogin, Token
+from app.schemas.recommendation import RecommendationResponse
+from app.auth.jwt_handler import JWTHandler
 from datetime import timedelta
 
-from CineCompassBackend.app.schemas.recommendationRequest import RecommendationRequest
+from app.schemas.recommendationRequest import RecommendationRequest
 
 router = APIRouter()
 jwt_handler = JWTHandler()

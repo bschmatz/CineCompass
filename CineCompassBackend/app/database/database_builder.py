@@ -6,8 +6,8 @@ from dotenv import load_dotenv
 from datetime import datetime
 import time
 import logging
-from CineCompassBackend.app.database.init_db import init_db
-from CineCompassBackend.app.models.movie import Movie
+from app.database.init_db import init_db
+from app.models.movie import Movie
 
 load_dotenv()
 

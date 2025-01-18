@@ -1,5 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean
-from CineCompassBackend.app.database.init_db import Base
+from app.database.init_db import Base
 from passlib.hash import bcrypt
 
 
