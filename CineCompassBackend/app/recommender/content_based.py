@@ -42,7 +42,7 @@ class CineCompassRecommender:
                 if not self.movies_df.empty:
                     self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(
                         self.movies_df['combined_features']
-                    )
+                    ).tocsr()
         except Exception as e:
             logger.error(f"Error loading movies: {str(e)}")
             raise

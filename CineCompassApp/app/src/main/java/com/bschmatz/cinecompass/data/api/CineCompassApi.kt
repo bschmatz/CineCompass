@@ -1,7 +1,10 @@
 package com.bschmatz.cinecompass.data.api
 
+import com.bschmatz.cinecompass.data.models.BatchRatingRequest
+import com.bschmatz.cinecompass.data.models.BatchRatingResponse
 import com.bschmatz.cinecompass.data.models.LoginRequest
 import com.bschmatz.cinecompass.data.models.MovieRating
+import com.bschmatz.cinecompass.data.models.PopularMovie
 import com.bschmatz.cinecompass.data.models.RecommendationResponse
 import com.bschmatz.cinecompass.data.models.RegisterRequest
 import com.bschmatz.cinecompass.data.models.TokenResponse
@@ -32,4 +35,15 @@ interface CineCompassApi {
         @Body rating: MovieRating,
         @Header("Authorization") authorization: String
     )
+
+    @GET("movies/popular")
+    suspend fun getPopularMovies(
+        @Query("limit") limit: Int = 10
+    ): List<PopularMovie>
+
+    @POST("ratings/batch")
+    suspend fun submitBatchRatings(
+        @Body ratings: BatchRatingRequest,
+        @Header("Authorization") authorization: String
+    ): BatchRatingResponse
 }

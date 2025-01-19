@@ -1,6 +1,7 @@
 package com.bschmatz.cinecompass.di
 
 import android.content.Context
+import com.bschmatz.cinecompass.data.local.OnboardingManager
 import com.bschmatz.cinecompass.data.local.TokenManager
 import com.google.gson.Gson
 import dagger.Module
@@ -17,5 +18,11 @@ object AppModule {
     @Singleton
     fun provideTokenManager(@ApplicationContext context: Context, gson: Gson): TokenManager {
         return TokenManager(context, gson)
+    }
+
+    @Provides
+    @Singleton
+    fun provideOnboardingManager(@ApplicationContext context: Context): OnboardingManager {
+        return OnboardingManager(context)
     }
 }

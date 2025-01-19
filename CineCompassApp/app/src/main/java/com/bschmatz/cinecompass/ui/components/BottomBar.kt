@@ -27,10 +27,14 @@ val bottomNavItems = listOf(
 
 @Composable
 fun BottomBar(navController: NavController) {
-    NavigationBar {
-        val navBackStackEntry by navController.currentBackStackEntryAsState()
-        val currentRoute = navBackStackEntry?.destination?.route
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStackEntry?.destination?.route
 
+    if (currentRoute == Screen.Onboarding.route) {
+        return
+    }
+
+    NavigationBar {
         bottomNavItems.forEach { item ->
             NavigationBarItem(
                 icon = { Icon(item.icon, contentDescription = item.label) },
