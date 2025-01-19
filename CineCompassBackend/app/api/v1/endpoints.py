@@ -1,4 +1,4 @@
-from typing import List
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.database_builder import CineCompassDatabaseBuilder
@@ -8,9 +8,8 @@ from app.models.user import User
 from app.schemas.auth import UserCreate, UserLogin, Token
 from app.schemas.recommendation import RecommendationResponse
 from app.auth.jwt_handler import JWTHandler
-from datetime import timedelta
-
-from app.schemas.recommendationRequest import RecommendationRequest
+from datetime import timedelta, datetime
+from app.schemas.rating import RatingCreate
 
 router = APIRouter()
 jwt_handler = JWTHandler()
@@ -64,31 +63,40 @@ def get_builder():
     return builder
 
 
-def get_recommender():
-    recommender = CineCompassRecommender()
-    return recommender
+def get_recommender(db: Session = Depends(get_db)) -> CineCompassRecommender:
+    return CineCompassRecommender(db)
 
 
-@router.post("/recommendations", response_model=RecommendationResponse)
-async def get_recommendations(
-        request: RecommendationRequest,
-        current_user: User = Depends(get_current_user),
-        recommender: CineCompassRecommender = Depends(get_recommender)
+@router.post("/ratings")
+async def add_rating(
+    rating: RatingCreate,
+    current_user: User = Depends(get_current_user),
+    recommender: CineCompassRecommender = Depends(get_recommender)
 ):
     try:
-        user_ratings = [(rating.movie_id, rating.rating) for rating in request.ratings]
-
-        if request.force_refresh:
-            recommender.get_recommendations(
-                user_id=current_user.id,
-                user_ratings=user_ratings,
-                force_refresh=True
-            )
-
-        return recommender.get_cached_recommendations(
+        return recommender.process_rating(
             user_id=current_user.id,
-            page=request.page,
-            page_size=request.page_size
+            movie_id=rating.movie_id,
+            rating=rating.rating
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/recommendations", response_model=RecommendationResponse)
+async def get_recommendations(
+    page: int = 1,
+    page_size: int = 20,
+    last_sync_time: Optional[str] = None,
+    current_user: User = Depends(get_current_user),
+    recommender: CineCompassRecommender = Depends(get_recommender)
+):
+    try:
+        sync_time = datetime.fromisoformat(last_sync_time) if last_sync_time else None
+        return recommender.get_recommendations(
+            user_id=current_user.id,
+            page=page,
+            page_size=page_size,
+            last_sync_time=sync_time
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

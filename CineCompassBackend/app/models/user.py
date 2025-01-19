@@ -1,4 +1,5 @@
 from sqlalchemy import Column, Integer, String, Boolean
+from sqlalchemy.orm import relationship
 from app.database.init_db import Base
 from passlib.hash import bcrypt
 
@@ -11,6 +12,7 @@ class User(Base):
     email = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
     is_admin = Column(Boolean, default=False)
+    ratings = relationship("Rating", back_populates="user")
 
     def verify_password(self, password: str) -> bool:
         return bcrypt.verify(password, self.hashed_password)
