@@ -17,7 +17,12 @@ logger = logging.getLogger(__name__)
 class CineCompassRecommender:
     def __init__(self, db: Session):
         self.db = db
-        self.tfidf_vectorizer = TfidfVectorizer(stop_words="english")
+        self.tfidf_vectorizer = TfidfVectorizer(
+            stop_words="english",
+            max_features=1000,
+            min_df=5,
+            max_df=0.9
+        )
         self.tfidf_matrix = None
         self.movies_df = None
         self.last_update_time = {}
