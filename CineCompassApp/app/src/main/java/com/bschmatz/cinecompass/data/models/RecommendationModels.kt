@@ -24,7 +24,15 @@ data class Recommendation(
     val similarityScore: Double,
     val genres: List<String>,
     val cast: List<String>,
-    val directory: String
+    val director: String,
+    @SerializedName("poster_path")
+    val posterPath: String?,
+    @SerializedName("backdrop_path")
+    val backdropPath: String?,
+    val overview: String,
+    @SerializedName("vote_average")
+    val voteAverage: Double,
+    val popularity: Double
 )
 
 data class RecommendationResponse(

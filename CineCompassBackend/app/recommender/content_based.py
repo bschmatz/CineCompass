@@ -5,7 +5,7 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
 from sqlalchemy.orm import Session
-from app.models.rating import Rating
+from app.models.rating import Rating, RatingCreate
 from app.models.cached_recommendation import CachedRecommendation
 from app.models.movie import Movie
 from app.schemas.recommendation import RecommendationResponse
@@ -160,5 +160,49 @@ class CineCompassRecommender:
             self.db.commit()
         except Exception as e:
             logger.error(f"Error updating recommendations: {str(e)}")
+            self.db.rollback()
+            raise
+
+    def get_popular_movies(self, limit: int = 10) -> List[Dict[str, Any]]:
+        try:
+            popular_movies = (
+                self.db.query(Movie)
+                .order_by(Movie.popularity.desc())
+                .limit(limit)
+                .all()
+            )
+
+            return [{
+                "id": movie.id,
+                "title": movie.title,
+                "overview": movie.overview,
+                "genres": movie.genres,
+                "poster_path": movie.poster_path,
+                "vote_average": movie.vote_average,
+                "popularity": movie.popularity
+            } for movie in popular_movies]
+        except Exception as e:
+            logger.error(f"Error getting popular movies: {str(e)}")
+            raise
+
+    def process_batch_ratings(self, user_id: int, ratings: List[RatingCreate]) -> Dict[str, Any]:
+        try:
+            for rating in ratings:
+                db_rating = Rating(
+                    user_id=user_id,
+                    movie_id=rating.movie_id,
+                    rating=rating.rating,
+                    timestamp=datetime.utcnow()
+                )
+                self.db.add(db_rating)
+
+            self.db.commit()
+
+            self._update_recommendations(user_id)
+            self.last_update_time[user_id] = datetime.utcnow()
+
+            return {"status": "success", "message": f"Successfully processed {len(ratings)} ratings"}
+        except Exception as e:
+            logger.error(f"Error processing batch ratings: {str(e)}")
             self.db.rollback()
             raise

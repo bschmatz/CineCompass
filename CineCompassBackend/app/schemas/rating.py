@@ -1,3 +1,5 @@
+from typing import List
+
 from pydantic import BaseModel
 from datetime import datetime
 
@@ -8,6 +10,10 @@ class RatingBase(BaseModel):
 
 class RatingCreate(RatingBase):
     pass
+
+
+class BatchRatingCreate(BaseModel):
+    ratings: List[RatingCreate]
 
 
 class Rating(RatingBase):

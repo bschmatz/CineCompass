@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.database.database_builder import CineCompassDatabaseBuilder
@@ -9,7 +9,8 @@ from app.schemas.auth import UserCreate, UserLogin, Token
 from app.schemas.recommendation import RecommendationResponse
 from app.auth.jwt_handler import JWTHandler
 from datetime import timedelta, datetime
-from app.schemas.rating import RatingCreate
+from app.schemas.rating import RatingCreate, BatchRatingCreate
+from app.schemas.movie import PopularMovie
 
 router = APIRouter()
 jwt_handler = JWTHandler()
@@ -98,5 +99,39 @@ async def get_recommendations(
             page_size=page_size,
             last_sync_time=sync_time
         )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/movies/popular", response_model=List[PopularMovie])
+async def get_popular_movies(
+        limit: int = 10,
+        recommender: CineCompassRecommender = Depends(get_recommender)
+):
+    try:
+        return recommender.get_popular_movies(limit=limit)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/ratings/batch")
+async def add_batch_ratings(
+        ratings: BatchRatingCreate,
+        current_user: User = Depends(get_current_user),
+        recommender: CineCompassRecommender = Depends(get_recommender)
+):
+    try:
+        if len(ratings.ratings) > 20:
+            raise HTTPException(
+                status_code=400,
+                detail="Maximum 20 ratings can be submitted at once"
+            )
+
+        return recommender.process_batch_ratings(
+            user_id=current_user.id,
+            ratings=ratings.ratings
+        )
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
