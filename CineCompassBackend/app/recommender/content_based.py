@@ -5,9 +5,10 @@ from typing import List, Optional, Dict, Any
 from datetime import datetime, timedelta
 import logging
 from sqlalchemy.orm import Session
-from app.models.rating import Rating, RatingCreate
+from app.models.rating import Rating
 from app.models.cached_recommendation import CachedRecommendation
 from app.models.movie import Movie
+from app.schemas.rating import RatingCreate
 from app.schemas.recommendation import RecommendationResponse
 import pandas as pd
 
