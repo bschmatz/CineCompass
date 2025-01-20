@@ -40,5 +40,7 @@ data class RecommendationResponse(
     val total: Int,
     val page: Int,
     @SerializedName("page_size")
-    val pageSize: Int
+    val pageSize: Int,
+    @SerializedName("needs_sync")
+    val needsSync: Boolean?
 )

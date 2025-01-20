@@ -9,6 +9,8 @@ import com.bschmatz.cinecompass.data.local.TokenManager
 import com.bschmatz.cinecompass.data.models.Recommendation
 import com.bschmatz.cinecompass.data.repository.CineCompassRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
@@ -20,7 +22,6 @@ data class HomeState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val hasMoreContent: Boolean = true,
-    val ratings: MutableMap<Int, Double> = mutableMapOf()
 )
 
 @HiltViewModel
@@ -36,7 +37,8 @@ class HomeViewModel @Inject constructor(
     private val pageSize = 20
     private var isLoadingMore = false
     private var lastSyncTime: String? = null
-
+    private var ratingJob: Job? = null
+    private var backgroundRefreshJob: Job? = null
 
     init {
         loadInitialRecommendations()
@@ -52,6 +54,7 @@ class HomeViewModel @Inject constructor(
     private suspend fun fetchRecommendations() {
         tokenManager.tokenFlow.firstOrNull()?.let { token ->
             try {
+                state = state.copy(isLoading = true)
                 repository.getRecommendations(
                     token = token,
                     page = currentPage,
@@ -73,11 +76,12 @@ class HomeViewModel @Inject constructor(
 
                     lastSyncTime = LocalDateTime.now().toString()
 
-                }.onFailure { exception ->
-                    state = state.copy(
-                        isLoading = false,
-                        error = exception.message
-                    )
+                    if (response.needsSync == true && response.items.isNotEmpty()) {
+                        lastSyncTime = LocalDateTime.now().toString()
+                    } else if (response.needsSync == true && response.items.isEmpty()) {
+                        delay(500)
+                        fetchRecommendations()
+                    }
                 }
             } catch (e: Exception) {
                 state = state.copy(
@@ -88,11 +92,19 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun onMovieSwiped() {
-        if (state.currentIndex >= state.recommendations.size - 3 && !isLoadingMore && state.hasMoreContent) {
+    private fun scheduleBackgroundRefresh() {
+        backgroundRefreshJob?.cancel()
+        backgroundRefreshJob = viewModelScope.launch {
+            delay(500) // Small delay to ensure rating is processed
+            refresh()
+        }
+    }
+
+    fun setCurrentIndex(index: Int) {
+        state = state.copy(currentIndex = index)
+        if (index >= state.recommendations.size - 3 && !isLoadingMore && state.hasMoreContent) {
             loadMoreContent()
         }
-        state = state.copy(currentIndex = state.currentIndex + 1)
     }
 
     private fun loadMoreContent() {
@@ -107,21 +119,17 @@ class HomeViewModel @Inject constructor(
     }
 
     fun onRatingChanged(movieId: Int, rating: Double) {
-        viewModelScope.launch {
+        ratingJob?.cancel()
+        ratingJob = viewModelScope.launch {
+            delay(1000) // Debounce
             tokenManager.tokenFlow.firstOrNull()?.let { token ->
                 try {
                     repository.submitRating(token, movieId, rating)
                         .onSuccess {
-                            state = state.copy(
-                                ratings = state.ratings.toMutableMap().apply {
-                                    put(movieId, rating)
-                                }
-                            )
-                            currentPage = 1
-                            fetchRecommendations()
+                            // The next recommendations request will handle the refresh
+                            lastSyncTime = LocalDateTime.now().toString()
                         }
                 } catch (e: Exception) {
-                    // Handle error
                     state = state.copy(error = e.message)
                 }
             }
@@ -131,7 +139,14 @@ class HomeViewModel @Inject constructor(
     fun refresh() {
         viewModelScope.launch {
             currentPage = 1
+            state = state.copy(isLoading = true)
             fetchRecommendations()
         }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        ratingJob?.cancel()
+        backgroundRefreshJob?.cancel()
     }
 }
