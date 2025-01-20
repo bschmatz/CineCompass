@@ -22,6 +22,7 @@ data class HomeState(
     val isLoading: Boolean = false,
     val error: String? = null,
     val hasMoreContent: Boolean = true,
+    val isRefreshing: Boolean = false
 )
 
 @HiltViewModel
@@ -35,10 +36,10 @@ class HomeViewModel @Inject constructor(
 
     private var currentPage = 1
     private val pageSize = 20
-    private var isLoadingMore = false
     private var lastSyncTime: String? = null
     private var ratingJob: Job? = null
-    private var backgroundRefreshJob: Job? = null
+    private var fetchJob: Job? = null
+    private var hasNewRatings = false
 
     init {
         loadInitialRecommendations()
@@ -47,88 +48,85 @@ class HomeViewModel @Inject constructor(
     private fun loadInitialRecommendations() {
         viewModelScope.launch {
             state = state.copy(isLoading = true)
-            fetchRecommendations()
+            fetchRecommendations(isInitial = true)
         }
     }
 
-    private suspend fun fetchRecommendations() {
-        tokenManager.tokenFlow.firstOrNull()?.let { token ->
-            try {
-                state = state.copy(isLoading = true)
-                repository.getRecommendations(
-                    token = token,
-                    page = currentPage,
-                    pageSize = pageSize,
-                    lastSyncTime = lastSyncTime
-                ).onSuccess { response ->
-                    val newRecommendations = if (currentPage == 1) {
-                        response.items
-                    } else {
-                        state.recommendations + response.items
+    private fun fetchRecommendations(isInitial: Boolean = false) {
+        if (fetchJob?.isActive == true) return
+
+        fetchJob = viewModelScope.launch {
+            tokenManager.tokenFlow.firstOrNull()?.let { token ->
+                try {
+                    if (hasNewRatings && !isInitial) {
+                        currentPage = 1
+                        hasNewRatings = false
+                    }
+
+                    val response = repository.getRecommendations(
+                        token = token,
+                        page = currentPage,
+                        pageSize = pageSize,
+                        lastSyncTime = lastSyncTime
+                    ).getOrThrow()
+
+                    // Don't refresh for new ratings, just mark that we have them
+                    if (response.needsSync == true && response.newRatings.isNotEmpty()) {
+                        hasNewRatings = true
+                        return@launch
+                    }
+
+                    val newRecommendations = when {
+                        isInitial || currentPage == 1 -> response.items
+                        else -> state.recommendations + response.items
                     }
 
                     state = state.copy(
                         recommendations = newRecommendations,
                         isLoading = false,
+                        isRefreshing = false,
                         error = null,
                         hasMoreContent = response.items.size >= pageSize
                     )
 
                     lastSyncTime = LocalDateTime.now().toString()
-
-                    if (response.needsSync == true && response.items.isNotEmpty()) {
-                        lastSyncTime = LocalDateTime.now().toString()
-                    } else if (response.needsSync == true && response.items.isEmpty()) {
-                        delay(500)
-                        fetchRecommendations()
-                    }
+                } catch (e: Exception) {
+                    state = state.copy(
+                        isLoading = false,
+                        isRefreshing = false,
+                        error = e.message
+                    )
                 }
-            } catch (e: Exception) {
-                state = state.copy(
-                    isLoading = false,
-                    error = e.message
-                )
             }
-        }
-    }
-
-    private fun scheduleBackgroundRefresh() {
-        backgroundRefreshJob?.cancel()
-        backgroundRefreshJob = viewModelScope.launch {
-            delay(500) // Small delay to ensure rating is processed
-            refresh()
         }
     }
 
     fun setCurrentIndex(index: Int) {
         state = state.copy(currentIndex = index)
-        if (index >= state.recommendations.size - 3 && !isLoadingMore && state.hasMoreContent) {
+        if (index >= state.recommendations.size - 3 && !state.isLoading && state.hasMoreContent) {
             loadMoreContent()
         }
     }
 
     private fun loadMoreContent() {
-        if (isLoadingMore || !state.hasMoreContent) return
+        if (state.isLoading || !state.hasMoreContent) return
 
         viewModelScope.launch {
-            isLoadingMore = true
             currentPage++
             fetchRecommendations()
-            isLoadingMore = false
         }
     }
 
     fun onRatingChanged(movieId: Int, rating: Double) {
         ratingJob?.cancel()
         ratingJob = viewModelScope.launch {
-            delay(1000) // Debounce
+            delay(500)
             tokenManager.tokenFlow.firstOrNull()?.let { token ->
                 try {
-                    repository.submitRating(token, movieId, rating)
-                        .onSuccess {
-                            // The next recommendations request will handle the refresh
-                            lastSyncTime = LocalDateTime.now().toString()
-                        }
+                    repository.submitRating(token, movieId, rating).onSuccess {
+                        lastSyncTime = LocalDateTime.now().toString()
+                        hasNewRatings = true
+                    }
                 } catch (e: Exception) {
                     state = state.copy(error = e.message)
                 }
@@ -136,17 +134,9 @@ class HomeViewModel @Inject constructor(
         }
     }
 
-    fun refresh() {
-        viewModelScope.launch {
-            currentPage = 1
-            state = state.copy(isLoading = true)
-            fetchRecommendations()
-        }
-    }
-
     override fun onCleared() {
         super.onCleared()
         ratingJob?.cancel()
-        backgroundRefreshJob?.cancel()
+        fetchJob?.cancel()
     }
 }
