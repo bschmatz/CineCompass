@@ -13,10 +13,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.bschmatz.cinecompass.data.models.Recommendation
 import com.bschmatz.cinecompass.ui.components.MovieCard
+import com.bschmatz.cinecompass.ui.components.PosterView
 import com.bschmatz.cinecompass.viewmodels.HomeViewModel
 
 @OptIn(ExperimentalMaterialApi::class)
@@ -25,6 +31,8 @@ fun HomeScreen(
     viewModel: HomeViewModel = hiltViewModel()
 ) {
     val state = viewModel.state
+    var showFullPoster by remember { mutableStateOf(false) }
+    var selectedMovie by remember { mutableStateOf<Recommendation?>(null) }
 
     Box(modifier = Modifier.fillMaxSize()) {
         if (state.recommendations.isNotEmpty()) {
@@ -58,6 +66,12 @@ fun HomeScreen(
                         onRatingChanged = { rating ->
                             viewModel.onRatingChanged(movie.id, rating)
                         },
+                        onPosterClick = {
+                            if (movie.posterPath != null) {
+                                selectedMovie = movie
+                                showFullPoster = true
+                            }
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 }
@@ -81,6 +95,17 @@ fun HomeScreen(
                 text = error,
                 color = MaterialTheme.colorScheme.error,
                 modifier = Modifier.align(Alignment.Center)
+            )
+        }
+
+        if (showFullPoster && selectedMovie != null && selectedMovie?.posterPath != null) {
+            PosterView(
+                posterPath = selectedMovie!!.posterPath!!,
+                movieTitle = selectedMovie!!.title,
+                onDismiss = {
+                    showFullPoster = false
+                    selectedMovie = null
+                }
             )
         }
     }
