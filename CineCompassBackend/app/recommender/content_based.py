@@ -171,12 +171,6 @@ class CineCompassRecommender:
                 self.db.add(db_rating)
 
             self.db.commit()
-
-            last_update = self.last_update_time.get(user_id)
-            if not last_update or datetime.utcnow() - last_update > self.update_threshold:
-                self._update_recommendations(user_id)
-                self.last_update_time[user_id] = datetime.utcnow()
-
             return {"status": "success"}
         except Exception as e:
             logger.error(f"Error processing rating: {str(e)}")
@@ -278,7 +272,7 @@ class CineCompassRecommender:
 
         return merged
 
-    def _update_recommendations(self, user_id: int):
+    def update_recommendations(self, user_id: int):
         try:
             ratings = self.db.query(Rating).filter(Rating.user_id == user_id).all()
             if not ratings:
@@ -434,7 +428,7 @@ class CineCompassRecommender:
 
             self.db.commit()
 
-            self._update_recommendations(user_id)
+            self.update_recommendations(user_id)
             self.last_update_time[user_id] = datetime.utcnow()
 
             return {

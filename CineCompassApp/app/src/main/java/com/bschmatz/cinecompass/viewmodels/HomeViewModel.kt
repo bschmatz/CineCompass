@@ -13,7 +13,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.firstOrNull
 import kotlinx.coroutines.launch
-import java.time.LocalDateTime
 import javax.inject.Inject
 
 data class HomeState(
@@ -36,10 +35,8 @@ class HomeViewModel @Inject constructor(
 
     private var currentPage = 1
     private val pageSize = 20
-    private var lastSyncTime: String? = null
     private var ratingJob: Job? = null
     private var fetchJob: Job? = null
-    private var hasNewRatings = false
 
     init {
         loadInitialRecommendations()
@@ -52,29 +49,42 @@ class HomeViewModel @Inject constructor(
         }
     }
 
+    fun refreshRecommendations() {
+        viewModelScope.launch {
+            state = state.copy(isRefreshing = true)
+            tokenManager.tokenFlow.firstOrNull()?.let { token ->
+                try {
+                    repository.refreshSessions(token).onSuccess {
+                        currentPage = 1
+                        fetchRecommendations(isInitial = true)
+                    }.onFailure { e ->
+                        state = state.copy(
+                            isRefreshing = false,
+                            error = e.message
+                        )
+                    }
+                } catch (e: Exception) {
+                    state = state.copy(
+                        isRefreshing = false,
+                        error = e.message
+                    )
+                }
+            }
+        }
+    }
+
     private fun fetchRecommendations(isInitial: Boolean = false) {
         if (fetchJob?.isActive == true) return
 
         fetchJob = viewModelScope.launch {
             tokenManager.tokenFlow.firstOrNull()?.let { token ->
                 try {
-                    if (hasNewRatings && !isInitial) {
-                        currentPage = 1
-                        hasNewRatings = false
-                    }
-
                     val response = repository.getRecommendations(
                         token = token,
                         page = currentPage,
                         pageSize = pageSize,
-                        lastSyncTime = lastSyncTime
+                        lastSyncTime = null
                     ).getOrThrow()
-
-                    // Don't refresh for new ratings, just mark that we have them
-                    if (response.needsSync == true && response.newRatings.isNotEmpty()) {
-                        hasNewRatings = true
-                        return@launch
-                    }
 
                     val newRecommendations = when {
                         isInitial || currentPage == 1 -> response.items
@@ -88,8 +98,6 @@ class HomeViewModel @Inject constructor(
                         error = null,
                         hasMoreContent = response.items.size >= pageSize
                     )
-
-                    lastSyncTime = LocalDateTime.now().toString()
                 } catch (e: Exception) {
                     state = state.copy(
                         isLoading = false,
@@ -123,10 +131,7 @@ class HomeViewModel @Inject constructor(
             delay(500)
             tokenManager.tokenFlow.firstOrNull()?.let { token ->
                 try {
-                    repository.submitRating(token, movieId, rating).onSuccess {
-                        lastSyncTime = LocalDateTime.now().toString()
-                        hasNewRatings = true
-                    }
+                    repository.submitRating(token, movieId, rating)
                 } catch (e: Exception) {
                     state = state.copy(error = e.message)
                 }

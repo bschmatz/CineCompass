@@ -1,5 +1,6 @@
 from typing import Optional, List
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import Boolean
 from sqlalchemy.orm import Session
 from app.database.database_builder import CineCompassDatabaseBuilder
 from app.recommender.content_based import CineCompassRecommender
@@ -25,13 +26,40 @@ async def login(user_data: UserLogin, db: Session = Depends(get_db)):
     if not user or not user.verify_password(user_data.password):
         raise HTTPException(status_code=401, detail="Invalid username or password")
 
-    access_token = jwt_handler.create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(days=1)
-    )
+    user.last_session_refresh = datetime.utcnow()
+    db.commit()
+
+    recommender = CineCompassRecommender(db)
+    recommender.update_recommendations(user.id)
+
+    access_token = jwt_handler.create_access_token(data={"sub": str(user.id)}, expires_delta=timedelta(days=1))
 
     return {"access_token": access_token, "token_type": "bearer"}
 
+
+@router.post("/auth/refresh-session")
+async def refresh_session(
+        current_user: User = Depends(get_current_user),
+        db: Session = Depends(get_db)
+):
+    try:
+        current_user.last_session_refresh = datetime.utcnow()
+        db.commit()
+
+        recommender = CineCompassRecommender(db)
+        recommender.update_recommendations(current_user.id)
+
+        return {"status": "success", "message": "Session refreshed and recommendations updated"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/is-onboarded", response_model=bool)
+async def login(current_user: User = Depends(get_current_user)):
+    try:
+        test = current_user.has_finished_onboarding
+        return test
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate, db: Session = Depends(get_db)):

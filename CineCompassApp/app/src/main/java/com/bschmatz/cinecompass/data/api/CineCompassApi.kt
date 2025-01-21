@@ -46,4 +46,14 @@ interface CineCompassApi {
         @Body ratings: BatchRatingRequest,
         @Header("Authorization") authorization: String
     ): BatchRatingResponse
+
+    @POST("auth/refresh-session")
+    suspend fun refreshSession(
+        @Header("Authorization") authorization: String
+    )
+
+    @GET("is-onboarded")
+    suspend fun isOnboarded(
+        @Header("Authorization") authorization: String
+    ): Boolean
 }

@@ -68,4 +68,18 @@ class CineCompassRepository @Inject constructor(
         } catch (e: Exception) {
             Result.failure(e)
         }
+
+    suspend fun refreshSessions(token: String): Result<Unit> =
+        try {
+            Result.success(api.refreshSession("Bearer $token"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+
+    suspend fun isOnboarded(token: String): Result<Boolean> =
+        try {
+            Result.success(api.isOnboarded("Bearer $token"))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
 }

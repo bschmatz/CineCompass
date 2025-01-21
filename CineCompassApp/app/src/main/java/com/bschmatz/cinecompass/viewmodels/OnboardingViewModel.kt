@@ -5,7 +5,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bschmatz.cinecompass.data.local.OnboardingManager
 import com.bschmatz.cinecompass.data.local.TokenManager
 import com.bschmatz.cinecompass.data.models.MovieRating
 import com.bschmatz.cinecompass.data.models.PopularMovie
@@ -27,8 +26,7 @@ data class OnboardingState(
 @HiltViewModel
 class OnboardingViewModel @Inject constructor(
     private val repository: CineCompassRepository,
-    private val tokenManager: TokenManager,
-    private val onboardingManager: OnboardingManager
+    private val tokenManager: TokenManager
 ) : ViewModel() {
 
     var state by mutableStateOf(OnboardingState())
@@ -84,7 +82,6 @@ class OnboardingViewModel @Inject constructor(
             tokenManager.tokenFlow.firstOrNull()?.let { token ->
                 repository.submitBatchRatings(token, ratings)
                     .onSuccess {
-                        onboardingManager.setOnboardingCompleted()
                         state = state.copy(
                             isSubmitting = false,
                             onboardingCompleted = true

@@ -1,8 +1,12 @@
 package com.bschmatz.cinecompass.ui.screens
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.compose.NavHost
@@ -17,41 +21,49 @@ fun MainScreen(
     onLogout: () -> Unit,
     viewModel: MainViewModel = hiltViewModel()
 ) {
-    val navController = rememberNavController()
     val state = viewModel.state
 
-    val startDestination = if (state.needsOnboarding) {
-        Screen.Onboarding.route
-    } else {
-        Screen.Home.route
-    }
-
-    Scaffold(
-        bottomBar = {
-            if (!state.needsOnboarding) {
-                BottomBar(navController)
-            }
+    if (state.isLoading) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            CircularProgressIndicator(
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
-    ) { paddingValues ->
-        NavHost(
-            navController = navController,
-            startDestination = startDestination,
-            modifier = Modifier.padding(paddingValues)
-        ) {
-            composable(Screen.Onboarding.route) {
-                OnboardingScreen(
-                    onOnboardingComplete = {
-                        navController.navigate(Screen.Home.route) {
-                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+    } else {
+        val navController = rememberNavController()
+        val startDestination = if (state.needsOnboarding) {
+            Screen.Onboarding.route
+        } else {
+            Screen.Home.route
+        }
+
+        Scaffold(
+            bottomBar = {
+                if (!state.needsOnboarding) {
+                    BottomBar(navController)
+                }
+            }
+        ) { paddingValues ->
+            NavHost(
+                navController = navController,
+                startDestination = startDestination,
+                modifier = Modifier.padding(paddingValues)
+            ) {
+                composable(Screen.Onboarding.route) {
+                    OnboardingScreen(
+                        onOnboardingComplete = {
+                            navController.navigate(Screen.Home.route) {
+                                popUpTo(Screen.Onboarding.route) { inclusive = true }
+                            }
                         }
-                    }
-                )
-            }
-            composable(Screen.Home.route) {
-                HomeScreen()
-            }
-            composable(Screen.Profile.route) {
-                ProfileScreen(onLogout = onLogout)
+                    )
+                }
+                composable(Screen.Home.route) {
+                    HomeScreen()
+                }
+                composable(Screen.Profile.route) {
+                    ProfileScreen(onLogout = onLogout)
+                }
             }
         }
     }

@@ -64,4 +64,5 @@ dependencies {
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.junit)
     implementation(libs.coil.compose)
+    implementation(libs.androidx.material)
 }
