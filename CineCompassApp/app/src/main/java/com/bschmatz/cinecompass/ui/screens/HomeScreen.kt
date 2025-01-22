@@ -65,6 +65,7 @@ fun HomeScreen(
                         movie = movie,
                         onRatingChanged = { rating ->
                             viewModel.onRatingChanged(movie.id, rating)
+                            state.recommendations[page].userRating = rating
                         },
                         onPosterClick = {
                             if (movie.posterPath != null) {

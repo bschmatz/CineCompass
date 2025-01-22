@@ -2,15 +2,6 @@ package com.bschmatz.cinecompass.data.models
 
 import com.google.gson.annotations.SerializedName
 
-data class RecommendationRequest(
-    val ratings: List<MovieRating>,
-    val page: Int = 1,
-    @SerializedName("page_size")
-    val pageSize: Int = 25,
-    @SerializedName("force_refresh")
-    val forceRefresh: Boolean = false
-)
-
 data class MovieRating(
     @SerializedName("movie_id")
     val movieId: Int,
@@ -32,7 +23,8 @@ data class Recommendation(
     val overview: String,
     @SerializedName("vote_average")
     val voteAverage: Double,
-    val popularity: Double
+    val popularity: Double,
+    var userRating: Double = 0.0,
 )
 
 data class RecommendationResponse(

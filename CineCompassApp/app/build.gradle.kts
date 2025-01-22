@@ -65,4 +65,5 @@ dependencies {
     implementation(libs.junit)
     implementation(libs.coil.compose)
     implementation(libs.androidx.material)
+    implementation(libs.androidx.material.icons.extended)
 }
