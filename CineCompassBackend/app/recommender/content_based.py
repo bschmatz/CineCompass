@@ -1,4 +1,7 @@
+import os
+
 import numpy as np
+from pyexpat import features
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 from sklearn.preprocessing import MinMaxScaler
@@ -13,16 +16,18 @@ from app.models.movie import Movie
 from app.schemas.rating import RatingCreate
 from app.schemas.recommendation import RecommendationResponse
 import pandas as pd
-
+from dotenv import load_dotenv
 logger = logging.getLogger(__name__)
 
+load_dotenv()
 
 class CineCompassRecommender:
     def __init__(self, db: Session):
         self.db = db
+        max_features = 1000 if os.getenv("IS_PRODUCTION") == "true" else 2000
         self.tfidf_vectorizer = TfidfVectorizer(
             stop_words="english",
-            max_features=2000,
+            max_features=max_features,
             min_df=3,
             max_df=0.95,
             ngram_range=(1, 2)
