@@ -36,7 +36,6 @@ class CineCompassRecommender:
         self.movies_df = None
         self.last_update_time = {}
         self.update_threshold = timedelta(hours=4)
-        self.similarity_cache = {}
         self.scaler = MinMaxScaler()
         self._load_movies()
 
@@ -64,7 +63,6 @@ class CineCompassRecommender:
                     self.tfidf_matrix = self.tfidf_vectorizer.fit_transform(
                         self.movies_df['combined_features']
                     ).tocsr()
-                    self._precompute_popular_similarities()
         except Exception as e:
             logger.error(f"Error loading movies: {str(e)}")
             raise
@@ -90,25 +88,6 @@ class CineCompassRecommender:
             features.append(cleaned_overview)
 
         return " ".join(features)
-
-    def _precompute_popular_similarities(self):
-        popular_movies = (
-            self.db.query(Movie.id)
-            .order_by(Movie.popularity.desc())
-            .limit(100)
-            .all()
-        )
-
-        for movie_id, in popular_movies:
-            try:
-                movie_idx = self.movies_df[self.movies_df["id"] == movie_id].index[0]
-                similarities = cosine_similarity(
-                    self.tfidf_matrix[movie_idx:movie_idx + 1],
-                    self.tfidf_matrix
-                )[0]
-                self.similarity_cache[movie_id] = similarities
-            except IndexError:
-                continue
 
     def _calculate_diversity_score(self, recommended_movies: List[Dict]) -> float:
         if not recommended_movies:

@@ -1,46 +1,58 @@
 from typing import Optional, List
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import Boolean
+from fastapi import APIRouter, Depends, HTTPException, Header
 from sqlalchemy.orm import Session
 from app.database.database_builder import CineCompassDatabaseBuilder
 from app.recommender.content_based import CineCompassRecommender
-from app.auth.deps import get_db, get_current_user
+from app.auth.deps import get_db
 from app.models.user import User
-from app.schemas.auth import UserCreate, UserLogin, Token
 from app.schemas.recommendation import RecommendationResponse
-from app.auth.jwt_handler import JWTHandler
-from datetime import timedelta, datetime
+from datetime import datetime
 from app.schemas.rating import RatingCreate, BatchRatingCreate
 from app.schemas.movie import PopularMovie
+import uuid
 
 router = APIRouter()
-jwt_handler = JWTHandler()
+
+def get_or_create_session(session_id: Optional[str] = Header(None, alias="X-Session-ID"), db: Session = Depends(get_db)) -> User:
+    """Get existing session or create a new one"""
+    if not session_id:
+        # Generate new session ID
+        session_id = str(uuid.uuid4())
+
+    # Try to find existing session
+    user = db.query(User).filter(User.session_id == session_id).first()
+
+    if not user:
+        # Create new session
+        user = User(
+            session_id=session_id,
+            created_at=datetime.utcnow(),
+            last_session_refresh=datetime.utcnow()
+        )
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+
+    return user
 
 @router.get("/")
 async def root():
     return {"message": "CineCompass is running"}
 
-@router.post("/auth/login", response_model=Token)
-async def login(user_data: UserLogin, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.username == user_data.username).first()
-    if not user or not user.verify_password(user_data.password):
-        raise HTTPException(status_code=401, detail="Invalid username or password")
+@router.post("/init-session")
+async def init_session(
+    current_user: User = Depends(get_or_create_session)
+):
+    """Initialize or retrieve session"""
+    return {
+        "session_id": current_user.session_id,
+        "has_finished_onboarding": current_user.has_finished_onboarding
+    }
 
-    user.last_session_refresh = datetime.utcnow()
-    db.commit()
-
-    recommender = CineCompassRecommender(db)
-    recommender.update_recommendations(user.id)
-
-    access_token = jwt_handler.create_access_token(data={"sub": str(user.id)}, expires_delta=timedelta(days=1))
-
-    return {"access_token": access_token, "token_type": "bearer"}
-
-
-@router.post("/auth/refresh-session")
+@router.post("/refresh-session")
 async def refresh_session(
-        current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+    current_user: User = Depends(get_or_create_session),
+    db: Session = Depends(get_db)
 ):
     try:
         current_user.last_session_refresh = datetime.utcnow()
@@ -54,37 +66,11 @@ async def refresh_session(
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/is-onboarded", response_model=bool)
-async def login(current_user: User = Depends(get_current_user)):
+async def is_onboarded(current_user: User = Depends(get_or_create_session)):
     try:
-        test = current_user.has_finished_onboarding
-        return test
+        return current_user.has_finished_onboarding
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/auth/register", response_model=Token)
-async def register(user_data: UserCreate, db: Session = Depends(get_db)):
-    if db.query(User).filter(User.username == user_data.username).first():
-        raise HTTPException(status_code=400, detail="Username already registered")
-
-    if db.query(User).filter(User.email == user_data.email).first():
-        raise HTTPException(status_code=400, detail="Email already registered")
-
-    user = User(
-        username=user_data.username,
-        email=user_data.email,
-        hashed_password=User.hash_password(user_data.password)
-    )
-
-    db.add(user)
-    db.commit()
-    db.refresh(user)
-
-    access_token = jwt_handler.create_access_token(
-        data={"sub": str(user.id)},
-        expires_delta=timedelta(days=1)
-    )
-
-    return {"access_token": access_token, "token_type": "bearer"}
 
 
 def get_builder():
@@ -99,7 +85,7 @@ def get_recommender(db: Session = Depends(get_db)) -> CineCompassRecommender:
 @router.post("/ratings")
 async def add_rating(
     rating: RatingCreate,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_or_create_session),
     recommender: CineCompassRecommender = Depends(get_recommender)
 ):
     try:
@@ -116,7 +102,7 @@ async def get_recommendations(
     page: int = 1,
     page_size: int = 20,
     last_sync_time: Optional[str] = None,
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_or_create_session),
     recommender: CineCompassRecommender = Depends(get_recommender)
 ):
     try:
@@ -145,7 +131,7 @@ async def get_popular_movies(
 @router.post("/ratings/batch")
 async def add_batch_ratings(
         ratings: BatchRatingCreate,
-        current_user: User = Depends(get_current_user),
+        current_user: User = Depends(get_or_create_session),
         recommender: CineCompassRecommender = Depends(get_recommender)
 ):
     try:

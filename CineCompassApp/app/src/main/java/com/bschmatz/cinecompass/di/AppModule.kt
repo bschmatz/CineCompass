@@ -1,8 +1,7 @@
 package com.bschmatz.cinecompass.di
 
 import android.content.Context
-import com.bschmatz.cinecompass.data.local.TokenManager
-import com.google.gson.Gson
+import com.bschmatz.cinecompass.data.local.SessionManager
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -15,7 +14,7 @@ import javax.inject.Singleton
 object AppModule {
     @Provides
     @Singleton
-    fun provideTokenManager(@ApplicationContext context: Context, gson: Gson): TokenManager {
-        return TokenManager(context, gson)
+    fun provideSessionManager(@ApplicationContext context: Context): SessionManager {
+        return SessionManager(context)
     }
 }

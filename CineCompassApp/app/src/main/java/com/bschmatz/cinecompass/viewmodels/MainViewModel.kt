@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bschmatz.cinecompass.data.local.TokenManager
+import com.bschmatz.cinecompass.data.local.SessionManager
 import com.bschmatz.cinecompass.data.repository.CineCompassRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.firstOrNull
@@ -15,7 +15,7 @@ import javax.inject.Inject
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val repository: CineCompassRepository,
-    private val tokenManager: TokenManager
+    private val sessionManager: SessionManager
 ) : ViewModel() {
     var state by mutableStateOf(MainState())
         private set
@@ -26,8 +26,8 @@ class MainViewModel @Inject constructor(
 
     private fun checkOnboardingStatus() {
         viewModelScope.launch {
-            tokenManager.tokenFlow.firstOrNull()?.let { token ->
-                repository.isOnboarded(token)
+            sessionManager.sessionFlow.firstOrNull()?.let { sessionId ->
+                repository.isOnboarded(sessionId)
                     .onSuccess { isOnboarded ->
                         state = state.copy(needsOnboarding = !isOnboarded, isLoading = false)
                     }

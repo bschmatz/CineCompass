@@ -5,7 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.bschmatz.cinecompass.data.local.TokenManager
+import com.bschmatz.cinecompass.data.local.SessionManager
 import com.bschmatz.cinecompass.data.models.Recommendation
 import com.bschmatz.cinecompass.data.repository.CineCompassRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -27,7 +27,7 @@ data class HomeState(
 @HiltViewModel
 class HomeViewModel @Inject constructor(
     private val repository: CineCompassRepository,
-    private val tokenManager: TokenManager
+    private val sessionManager: SessionManager
 ) : ViewModel() {
 
     var state by mutableStateOf(HomeState())
@@ -52,9 +52,9 @@ class HomeViewModel @Inject constructor(
     fun refreshRecommendations() {
         viewModelScope.launch {
             state = state.copy(isRefreshing = true)
-            tokenManager.tokenFlow.firstOrNull()?.let { token ->
+            sessionManager.sessionFlow.firstOrNull()?.let { sessionId ->
                 try {
-                    repository.refreshSessions(token).onSuccess {
+                    repository.refreshSessions(sessionId).onSuccess {
                         currentPage = 1
                         fetchRecommendations(isInitial = true)
                     }.onFailure { e ->
@@ -77,10 +77,10 @@ class HomeViewModel @Inject constructor(
         if (fetchJob?.isActive == true) return
 
         fetchJob = viewModelScope.launch {
-            tokenManager.tokenFlow.firstOrNull()?.let { token ->
+            sessionManager.sessionFlow.firstOrNull()?.let { sessionId ->
                 try {
                     val response = repository.getRecommendations(
-                        token = token,
+                        sessionId = sessionId,
                         page = currentPage,
                         pageSize = pageSize,
                         lastSyncTime = null
@@ -129,9 +129,9 @@ class HomeViewModel @Inject constructor(
         ratingJob?.cancel()
         ratingJob = viewModelScope.launch {
             delay(500)
-            tokenManager.tokenFlow.firstOrNull()?.let { token ->
+            sessionManager.sessionFlow.firstOrNull()?.let { sessionId ->
                 try {
-                    repository.submitRating(token, movieId, rating)
+                    repository.submitRating(sessionId, movieId, rating)
                 } catch (e: Exception) {
                     state = state.copy(error = e.message)
                 }
