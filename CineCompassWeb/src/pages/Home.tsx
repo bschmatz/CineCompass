@@ -1,8 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
 import type { Recommendation } from '../types';
 import { api } from '../utils/api';
+import { useSession, RATINGS_PER_CYCLE } from '../contexts/SessionContext';
+import { CompletionScreen } from '../components/CompletionScreen';
 
 export function Home() {
+  const session = useSession();
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
@@ -12,8 +15,10 @@ export function Home() {
   const [error, setError] = useState('');
   const [ratings, setRatings] = useState<Map<number, number>>(new Map());
   const [showPoster, setShowPoster] = useState(false);
+  const [showCycleComplete, setShowCycleComplete] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const ratingTimeoutRef = useRef<Map<number, ReturnType<typeof setTimeout>>>(new Map());
+  const hasTrackedRating = useRef<Set<number>>(new Set());
 
   useEffect(() => {
     loadRecommendations();
@@ -43,6 +48,23 @@ export function Home() {
     }
   }, [currentIndex, recommendations.length, isLoadingMore, hasMore]);
 
+  // Check if cycle is complete and trigger auto-refresh
+  useEffect(() => {
+    if (session.ratingsInCycle >= RATINGS_PER_CYCLE && !showCycleComplete) {
+      setShowCycleComplete(true);
+
+      // Auto-refresh after 3 seconds
+      const timer = setTimeout(async () => {
+        session.resetCycle();
+        hasTrackedRating.current.clear();
+        await handleRefresh();
+        setShowCycleComplete(false);
+      }, 3000);
+
+      return () => clearTimeout(timer);
+    }
+  }, [session.ratingsInCycle]);
+
   const loadRecommendations = async () => {
     try {
       setIsLoading(true);
@@ -56,6 +78,8 @@ export function Home() {
       response.items.forEach(movie => {
         if (movie.userRating) {
           initialRatings.set(movie.id, movie.userRating);
+          // Track that this movie was already rated
+          hasTrackedRating.current.add(movie.id);
         }
       });
       setRatings(initialRatings);
@@ -81,6 +105,8 @@ export function Home() {
       response.items.forEach(movie => {
         if (movie.userRating) {
           setRatings(prev => new Map(prev).set(movie.id, movie.userRating!));
+          // Track that this movie was already rated
+          hasTrackedRating.current.add(movie.id);
         }
       });
     } catch (err) {
@@ -107,7 +133,14 @@ export function Home() {
   };
 
   const handleRatingChange = (movieId: number, rating: number) => {
+    const previousRating = ratings.get(movieId);
     setRatings(prev => new Map(prev).set(movieId, rating));
+
+    // Track this rating in session (only if it's a new rating, not an update)
+    if (!hasTrackedRating.current.has(movieId) && rating > 0) {
+      hasTrackedRating.current.add(movieId);
+      session.incrementRating();
+    }
 
     // Clear existing timeout for this movie
     const existingTimeout = ratingTimeoutRef.current.get(movieId);
@@ -129,17 +162,42 @@ export function Home() {
   };
 
   const handleRefresh = async () => {
+    // Set loading state first
+    setIsLoading(true);
+
+    // Clear all current recommendations immediately to prevent scrolling back
+    setRecommendations([]);
     setCurrentIndex(0);
-    await loadRecommendations();
-    containerRef.current?.children[0]?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
-    });
+    setRatings(new Map());
+    setPage(1);
+    setHasMore(true);
+
+    // Scroll to top
+    if (containerRef.current) {
+      containerRef.current.scrollTop = 0;
+    }
+
+    try {
+      // Call backend to refresh session and clear cache
+      await api.refreshSession();
+
+      // Load fresh recommendations
+      await loadRecommendations();
+    } catch (err) {
+      console.error('Failed to refresh session:', err);
+      // Still try to load recommendations even if refresh fails
+      await loadRecommendations();
+    }
   };
 
   const getPosterUrl = (posterPath: string) => {
     return `https://image.tmdb.org/t/p/original${posterPath}`;
   };
+
+  // Show completion screen if study is complete
+  if (session.isStudyComplete) {
+    return <CompletionScreen googleFormUrl="https://forms.google.com/your-form-id" />;
+  }
 
   if (isLoading) {
     return (
@@ -214,6 +272,50 @@ export function Home() {
           />
         </svg>
       </button>
+
+      {/* Session Progress Indicator */}
+      <div className="fixed top-4 left-4 z-10 bg-gray-900/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-gray-700">
+        <div className="text-white text-sm">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold">Cycle {session.cyclesCompleted + 1}/4</span>
+            <span className="text-gray-400">|</span>
+            <span className="text-purple-400">{session.ratingsInCycle}/{RATINGS_PER_CYCLE} rated</span>
+          </div>
+          <div className="mt-1 w-32 h-1.5 bg-gray-700 rounded-full overflow-hidden">
+            <div
+              className="h-full bg-gradient-to-r from-purple-600 to-purple-400 transition-all duration-300"
+              style={{ width: `${(session.ratingsInCycle / RATINGS_PER_CYCLE) * 100}%` }}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Cycle Complete Notification */}
+      {showCycleComplete && (
+        <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-purple-900/90 to-purple-800/90 backdrop-blur-sm rounded-2xl p-8 border-2 border-purple-500 shadow-2xl max-w-md w-full animate-scale-in">
+            <div className="text-center">
+              <div className="w-16 h-16 bg-purple-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <svg className="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-bold text-white mb-2">
+                Cycle {session.cyclesCompleted} Complete!
+              </h3>
+              <p className="text-purple-200 mb-4">
+                Great job! You've rated {RATINGS_PER_CYCLE} movies.
+              </p>
+              <p className="text-purple-300 text-sm">
+                Refreshing recommendations...
+              </p>
+              <div className="mt-4">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-400 mx-auto"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Poster overlay */}
       {showPoster && currentMovie && (

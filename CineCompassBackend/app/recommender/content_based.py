@@ -321,6 +321,7 @@ class CineCompassRecommender:
             self.db.query(CachedRecommendation).filter(
                 CachedRecommendation.user_id == user_id
             ).delete()
+            self.db.commit()    
 
             batch_size = 100
             recommendations = []
