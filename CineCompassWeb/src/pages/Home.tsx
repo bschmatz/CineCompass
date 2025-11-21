@@ -178,7 +178,7 @@ export function Home() {
   };
 
   if (session.isStudyComplete) {
-    return <CompletionScreen googleFormUrl="https://forms.google.com/your-form-id" />;
+    return <CompletionScreen googleFormUrl="https://docs.google.com/forms/d/e/1FAIpQLSekkuDMCgqPPYQGwT_YtD0EtsM-TmUOKRUL34klUycapx-VMQ/viewform?usp=dialog" />;
   }
 
   if (isLoading) {
