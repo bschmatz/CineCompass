@@ -38,3 +38,4 @@ CineCompassBackend/app/database/movies.db
 local.properties
 **/.idea/
 bachelors_thesis/
+.netlify/
