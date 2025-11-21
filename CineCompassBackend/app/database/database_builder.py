@@ -1,196 +1,178 @@
-import pandas as pd
-import requests
-from typing import List, Set, Optional
-import os
-from dotenv import load_dotenv
-from datetime import datetime
-import time
+import asyncio
+import aiohttp
 import logging
+import os
+import math
+from typing import List, Set, Dict, Any
+from datetime import datetime
+from sqlalchemy.orm import Session
+from dotenv import load_dotenv
+
 from app.database.init_db import init_db
 from app.models.movie import Movie
 
 load_dotenv()
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
+
 class CineCompassDatabaseBuilder:
     def __init__(self):
         self.tmdb_access_token = os.getenv("TMDB_ACCESS_TOKEN")
         self.engine, self.Session = init_db()
-
-        logging.basicConfig(level=logging.INFO)
-        self.logger = logging.getLogger(__name__)
-
         self.processed_movies: Set[int] = set()
+        self.semaphore = asyncio.Semaphore(30) 
         self.load_processed_movies()
 
     def load_processed_movies(self):
         with self.Session() as session:
             movie_ids = session.query(Movie.id).all()
             self.processed_movies = set(id[0] for id in movie_ids)
-        self.logger.info(f"Loaded {len(self.processed_movies)} existing movie IDs")
+        logger.info(f"Loaded {len(self.processed_movies)} existing movie IDs")
 
-    def fetch_movies_from_list(self, list_type: str, max_pages: int = 5) -> List[dict]:
-        movies = []
-        page = 1
-
-        while page <= max_pages:
-            url = f"https://api.themoviedb.org/3/movie/{list_type}"
-            headers = {
-                "Authorization": f"Bearer {self.tmdb_access_token}",
-                "accept": "application/json"
-            }
-            params = {"page": page}
-
-            try:
-                response = requests.get(url, headers=headers, params=params)
-                response.raise_for_status()
-                data = response.json()
-
-                new_movies = [
-                    movie for movie in data["results"]
-                    if movie["id"] not in self.processed_movies
-                ]
-
-                if not new_movies:
-                    self.logger.info(f"No new movies found in {list_type} page {page}")
-                    break
-
-                movies.extend(new_movies)
-                self.logger.info(f"Fetched {len(new_movies)} new movies from {list_type} page {page}")
-
-                time.sleep(0.25)
-                page += 1
-
-            except requests.exceptions.RequestException as e:
-                self.logger.error(f"Error fetching {list_type} page {page}: {str(e)}")
-                break
-
-        return movies
-
-    def get_movie_details(self, movie_id: int) -> Optional[dict]:
-        url = f"https://api.themoviedb.org/3/movie/{movie_id}"
-        headers = {
-            "Authorization": f"Bearer {self.tmdb_access_token}",
-            "accept": "application/json"
-        }
-        params = {
-            "language": "en-US",
-            "append_to_response": "credits"
-        }
-
+    async def fetch_page_async(self, session: aiohttp.ClientSession, list_type: str, page: int) -> List[Dict]:
+        """Fetch a single page of movie lists (popular, top_rated, etc)"""
+        url = f"https://api.themoviedb.org/3/movie/{list_type}"
+        headers = {"Authorization": f"Bearer {self.tmdb_access_token}", "accept": "application/json"}
+        params = {"page": page}
+        
         try:
-            response = requests.get(url, headers=headers, params=params)
-            response.raise_for_status()
-            data = response.json()
+            async with session.get(url, headers=headers, params=params) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    return data.get("results", [])
+                else:
+                    logger.warning(f"Failed to fetch {list_type} page {page}: {response.status}")
+                    return []
+        except Exception as e:
+            logger.error(f"Error fetching {list_type} page {page}: {e}")
+            return []
 
-            return {
-                "genres": [g["name"] for g in data.get("genres", [])],
-                "cast": [c["name"] for c in data.get("credits", {}).get("cast", [])[:5]],
-                "director": next(
-                    (c["name"] for c in data.get("credits", {}).get("crew", [])
-                     if c["job"] == "Director"),
-                    "Unknown"
-                )
-            }
+    async def fetch_movie_details_async(self, session: aiohttp.ClientSession, movie_basic_data: Dict) -> Dict:
+        """Fetch details for a specific movie ID"""
+        movie_id = movie_basic_data['id']
+        url = f"https://api.themoviedb.org/3/movie/{movie_id}"
+        headers = {"Authorization": f"Bearer {self.tmdb_access_token}", "accept": "application/json"}
+        params = {"append_to_response": "credits"}
 
-        except requests.exceptions.RequestException as e:
-            self.logger.error(f"Error fetching details for movie {movie_id}: {str(e)}")
-            return None
+        # Use semaphore to limit concurrency so we don't hit 429 Too Many Requests
+        async with self.semaphore:
+            try:
+                async with session.get(url, headers=headers, params=params) as response:
+                    if response.status == 200:
+                        data = await response.json()
+                        return {
+                            "basic_data": movie_basic_data,
+                            "details": data
+                        }
+                    elif response.status == 429:
+                        logger.warning("Rate limit hit, sleeping briefly...")
+                        await asyncio.sleep(1)
+                        return None
+                    else:
+                        return None
+            except Exception as e:
+                logger.error(f"Error fetching details for {movie_id}: {e}")
+                return None
 
     @staticmethod
-    def create_combined_features(title: str, overview: str, genres: List[str],cast: List[str], director: str) -> str:
-        return f"{title} {overview} {' '.join(genres)} {' '.join(cast)} {director}"
+    def process_movie_data(data: Dict) -> Movie:
+        """Transform raw API data into a Movie object"""
+        basic = data['basic_data']
+        details = data['details']
+        
+        genres = [g["name"] for g in details.get("genres", [])]
+        # Take top 5 cast
+        cast = [c["name"] for c in details.get("credits", {}).get("cast", [])[:5]]
+        director = next(
+            (c["name"] for c in details.get("credits", {}).get("crew", []) if c["job"] == "Director"), 
+            "Unknown"
+        )
 
-    def process_movies_batch(self, movies: List[dict], batch_size: int = 10) -> int:
-        processed_count = 0
+        combined_features = f"{basic['title']} {basic.get('overview', '')} {' '.join(genres)} {' '.join(cast)} {director}"
 
-        for i in range(0, len(movies), batch_size):
-            self.logger.info(f"Processing batch {i // batch_size + 1} out of {len(movies) // batch_size + 1}")
-            batch = movies[i:i + batch_size]
-            with self.Session() as session:
-                for movie_data in batch:
-                    if movie_data["id"] in self.processed_movies:
-                        continue
+        return Movie(
+            id=basic["id"],
+            title=basic["title"],
+            overview=basic.get("overview", ""),
+            genres=genres,
+            cast=cast,
+            director=director,
+            popularity=basic.get("popularity", 0),
+            vote_average=basic.get("vote_average", 0),
+            last_updated=datetime.now(),
+            combined_features=combined_features,
+            poster_path=basic.get("poster_path"),
+            backdrop_path=basic.get("backdrop_path")
+        )
 
-                    details = self.get_movie_details(movie_data["id"])
-                    if not details:
-                        continue
-
-                    combined_features = self.create_combined_features(
-                        movie_data["title"],
-                        movie_data.get("overview", ""),
-                        details["genres"],
-                        details["cast"],
-                        details["director"]
-                    )
-
-                    movie = Movie(
-                        id=movie_data["id"],
-                        title=movie_data["title"],
-                        overview=movie_data.get("overview", ""),
-                        genres=details["genres"],
-                        cast=details["cast"],
-                        director=details["director"],
-                        popularity=movie_data.get("popularity", 0),
-                        vote_average=movie_data.get("vote_average", 0),
-                        last_updated=datetime.now(),
-                        combined_features=combined_features,
-                        poster_path=movie_data.get("poster_path"),
-                        backdrop_path=movie_data.get("backdrop_path")
-                    )
-
-                    session.merge(movie)
-                    self.processed_movies.add(movie_data["id"])
-                    processed_count += 1
-
-                session.commit()
-
-            time.sleep(0.25)
-
-        return processed_count
-
-    def populate_database(self, target_size: int = 1000):
+    async def run_population_async(self, target_size: int = 5000):
         current_size = len(self.processed_movies)
-        self.logger.info(f"Current database size: {current_size}")
-
         if current_size >= target_size:
-            self.logger.info("Database already meets target size")
+            logger.info("Database already populated.")
             return
 
-        sources = ["popular", "top_rated", "now_playing"]
-        max_pages_per_source = 200
+        needed = target_size - current_size
+        logger.info(f"Need to fetch approximately {needed} more movies.")
 
-        for source in sources:
-            if len(self.processed_movies) >= target_size:
-                break
+        async with aiohttp.ClientSession() as session:
+            sources = ["popular", "top_rated", "now_playing"]
+            candidates = []
+            
+            pages_per_source = math.ceil((needed / 20) / len(sources)) + 5
+            
+            tasks = []
+            for source in sources:
+                for page in range(1, pages_per_source + 1):
+                    tasks.append(self.fetch_page_async(session, source, page))
+            
+            logger.info(f"Fetching movie lists from {len(tasks)} pages...")
+            results = await asyncio.gather(*tasks)
+            
+            unique_candidates = {}
+            for batch in results:
+                for movie in batch:
+                    if movie['id'] not in self.processed_movies:
+                        unique_candidates[movie['id']] = movie
+            
+            candidates_list = list(unique_candidates.values())[:needed]
+            logger.info(f"Found {len(candidates_list)} unique new movies to process.")
 
-            self.logger.info(f"Fetching movies from {source}")
-            movies = self.fetch_movies_from_list(source, max_pages_per_source)
+            batch_size = 50
+            
+            for i in range(0, len(candidates_list), batch_size):
+                batch_candidates = candidates_list[i : i + batch_size]
+                logger.info(f"Enriching batch {i} to {i + len(batch_candidates)}...")
+                
+                detail_tasks = [self.fetch_movie_details_async(session, m) for m in batch_candidates]
+                detailed_results = await asyncio.gather(*detail_tasks)
+                
+                valid_results = [r for r in detailed_results if r is not None]
+                
+                self._bulk_save(valid_results)
+                
+    def _bulk_save(self, valid_results: List[Dict]):
+        if not valid_results:
+            return
 
-            if movies:
-                processed = self.process_movies_batch(movies)
-                self.logger.info(f"Processed {processed} new movies from {source}")
+        with self.Session() as db_session:
+            movie_objects = []
+            for data in valid_results:
+                movie_objects.append(self.process_movie_data(data))
+                self.processed_movies.add(data['basic_data']['id'])
+            
+            try:
+                for movie in movie_objects:
+                    db_session.merge(movie)
+                db_session.commit()
+                logger.info(f"Saved {len(movie_objects)} movies to database.")
+            except Exception as e:
+                logger.error(f"Database error: {e}")
+                db_session.rollback()
 
-            current_size = len(self.processed_movies)
-            self.logger.info(f"Current database size: {current_size}")
+    def populate(self, target_size: int = 5000):
+        asyncio.run(self.run_population_async(target_size))
 
-    def update_existing_movies(self, days_threshold: int = 30):
-        with self.Session() as session:
-            outdated_movies = session.query(Movie).filter(
-                Movie.last_updated < datetime.now() - pd.Timedelta(days=days_threshold)
-            ).all()
-
-            for movie in outdated_movies:
-                details = self.get_movie_details(movie.id)
-                if details:
-                    movie.genres = details["genres"]
-                    movie.cast = details["cast"]
-                    movie.director = details["director"]
-                    movie.last_updated = datetime.now()
-                    movie.combined_features = self.create_combined_features(
-                        movie.title, movie.overview, details["genres"],
-                        details["cast"], details["director"]
-                    )
-                    self.logger.info(f"Updated movie: {movie.title}")
-                time.sleep(0.25)  # Rate limiting
-
-            session.commit()
+if __name__ == "__main__":
+    builder = CineCompassDatabaseBuilder()
+    builder.populate(target_size=5000)

@@ -38,7 +38,6 @@ export function Home() {
   }, [currentIndex, recommendations.length]);
 
   useEffect(() => {
-    // Load more when near the end
     if (
       currentIndex >= recommendations.length - 3 &&
       !isLoadingMore &&
@@ -48,22 +47,20 @@ export function Home() {
     }
   }, [currentIndex, recommendations.length, isLoadingMore, hasMore]);
 
-  // Check if cycle is complete and trigger auto-refresh
   useEffect(() => {
-    if (session.ratingsInCycle >= RATINGS_PER_CYCLE && !showCycleComplete) {
+    if (session.ratingsInCycle >= RATINGS_PER_CYCLE && !showCycleComplete && !session.isStudyComplete) {
       setShowCycleComplete(true);
 
-      // Auto-refresh after 3 seconds
       const timer = setTimeout(async () => {
         session.resetCycle();
         hasTrackedRating.current.clear();
         await handleRefresh();
         setShowCycleComplete(false);
-      }, 3000);
+      }, 1500);
 
       return () => clearTimeout(timer);
     }
-  }, [session.ratingsInCycle]);
+  }, [session.ratingsInCycle, session.isStudyComplete]);
 
   const loadRecommendations = async () => {
     try {
@@ -73,12 +70,10 @@ export function Home() {
       setHasMore(response.items.length === 20);
       setPage(1);
 
-      // Initialize ratings from userRating if available
       const initialRatings = new Map<number, number>();
       response.items.forEach(movie => {
         if (movie.userRating) {
           initialRatings.set(movie.id, movie.userRating);
-          // Track that this movie was already rated
           hasTrackedRating.current.add(movie.id);
         }
       });
@@ -101,11 +96,9 @@ export function Home() {
       setHasMore(response.items.length === 20);
       setPage(nextPage);
 
-      // Add new ratings
       response.items.forEach(movie => {
         if (movie.userRating) {
           setRatings(prev => new Map(prev).set(movie.id, movie.userRating!));
-          // Track that this movie was already rated
           hasTrackedRating.current.add(movie.id);
         }
       });
@@ -133,22 +126,18 @@ export function Home() {
   };
 
   const handleRatingChange = (movieId: number, rating: number) => {
-    const previousRating = ratings.get(movieId);
     setRatings(prev => new Map(prev).set(movieId, rating));
 
-    // Track this rating in session (only if it's a new rating, not an update)
     if (!hasTrackedRating.current.has(movieId) && rating > 0) {
       hasTrackedRating.current.add(movieId);
       session.incrementRating();
     }
 
-    // Clear existing timeout for this movie
     const existingTimeout = ratingTimeoutRef.current.get(movieId);
     if (existingTimeout) {
       clearTimeout(existingTimeout);
     }
 
-    // Set new timeout for debounced API call
     const timeout = setTimeout(async () => {
       try {
         await api.rateMovie(movieId, rating);
@@ -162,30 +151,24 @@ export function Home() {
   };
 
   const handleRefresh = async () => {
-    // Set loading state first
     setIsLoading(true);
 
-    // Clear all current recommendations immediately to prevent scrolling back
     setRecommendations([]);
     setCurrentIndex(0);
     setRatings(new Map());
     setPage(1);
     setHasMore(true);
 
-    // Scroll to top
     if (containerRef.current) {
       containerRef.current.scrollTop = 0;
     }
 
     try {
-      // Call backend to refresh session and clear cache
       await api.refreshSession();
 
-      // Load fresh recommendations
       await loadRecommendations();
     } catch (err) {
       console.error('Failed to refresh session:', err);
-      // Still try to load recommendations even if refresh fails
       await loadRecommendations();
     }
   };
@@ -194,7 +177,6 @@ export function Home() {
     return `https://image.tmdb.org/t/p/original${posterPath}`;
   };
 
-  // Show completion screen if study is complete
   if (session.isStudyComplete) {
     return <CompletionScreen googleFormUrl="https://forms.google.com/your-form-id" />;
   }
@@ -252,7 +234,6 @@ export function Home() {
         </div>
       )}
 
-      {/* Refresh button */}
       <button
         onClick={handleRefresh}
         className="fixed top-4 right-4 z-10 bg-gray-900/80 backdrop-blur-sm p-3 rounded-full hover:bg-gray-800 transition-all border border-gray-700"
@@ -273,7 +254,6 @@ export function Home() {
         </svg>
       </button>
 
-      {/* Session Progress Indicator */}
       <div className="fixed top-4 left-4 z-10 bg-gray-900/80 backdrop-blur-sm px-4 py-2 rounded-lg border border-gray-700">
         <div className="text-white text-sm">
           <div className="flex items-center gap-2">
@@ -290,8 +270,7 @@ export function Home() {
         </div>
       </div>
 
-      {/* Cycle Complete Notification */}
-      {showCycleComplete && (
+      {showCycleComplete && !session.isStudyComplete && (
         <div className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4">
           <div className="bg-gradient-to-br from-purple-900/90 to-purple-800/90 backdrop-blur-sm rounded-2xl p-8 border-2 border-purple-500 shadow-2xl max-w-md w-full animate-scale-in">
             <div className="text-center">
@@ -301,23 +280,44 @@ export function Home() {
                 </svg>
               </div>
               <h3 className="text-2xl font-bold text-white mb-2">
-                Cycle {session.cyclesCompleted} Complete!
+                Cycle {session.cyclesCompleted + 1} Complete!
               </h3>
               <p className="text-purple-200 mb-4">
                 Great job! You've rated {RATINGS_PER_CYCLE} movies.
               </p>
-              <p className="text-purple-300 text-sm">
-                Refreshing recommendations...
+              <p className="text-purple-300 text-sm mb-6">
+                Starting next cycle...
               </p>
-              <div className="mt-4">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-400 mx-auto"></div>
-              </div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-400 mx-auto"></div>
             </div>
           </div>
         </div>
       )}
 
-      {/* Poster overlay */}
+      {session.isStudyComplete && (
+        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4">
+          <div className="bg-gradient-to-br from-purple-900 to-gray-900 rounded-2xl p-8 border border-purple-500 shadow-2xl max-w-lg w-full text-center">
+            <h2 className="text-3xl font-bold text-white mb-4">Study Complete!</h2>
+            <p className="text-gray-300 text-lg mb-8">
+              Thank you for participating in our study. To complete the process, please fill out our feedback form.
+            </p>
+
+            <a
+              href="https://docs.google.com/forms/d/e/1FAIpQLSf9gQ9k9X8z8x7y6c5v4b3n2m1l0k9j8h7g6f5d4s3a2q1w/viewform?usp=sf_link"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-block w-full bg-gradient-to-r from-purple-500 to-pink-600 text-white text-xl font-bold py-4 rounded-xl hover:from-purple-600 hover:to-pink-700 transition-all transform hover:scale-105 shadow-lg"
+            >
+              Open Feedback Form
+            </a>
+
+            <p className="mt-6 text-sm text-gray-500">
+              You can close this tab after submitting the form.
+            </p>
+          </div>
+        </div>
+      )}
+
       {showPoster && currentMovie && (
         <div
           className="fixed inset-0 z-50 bg-black/95 flex items-center justify-center p-4"
@@ -356,7 +356,6 @@ function MovieCard({ movie, rating, onRatingChange, onPosterClick }: MovieCardPr
 
   return (
     <div className="relative h-screen snap-start flex items-center justify-center bg-gray-950">
-      {/* Background poster with gradient overlay */}
       <div className="absolute inset-0 overflow-hidden">
         <img
           src={getPosterUrl(movie.backdrop_path || movie.poster_path)}
@@ -367,9 +366,7 @@ function MovieCard({ movie, rating, onRatingChange, onPosterClick }: MovieCardPr
         <div className="absolute inset-0 bg-gradient-to-t from-gray-950 via-gray-950/80 to-transparent"></div>
       </div>
 
-      {/* Content */}
       <div className="relative z-10 w-full max-w-2xl px-6 pb-20">
-        {/* Title and rating badge */}
         <div className="flex items-start justify-between gap-4 mb-4">
           <h2 className="text-4xl font-bold text-white flex-1">{movie.title}</h2>
           <div className="flex items-center gap-1 bg-yellow-500/20 px-3 py-2 rounded-lg flex-shrink-0">
@@ -382,7 +379,6 @@ function MovieCard({ movie, rating, onRatingChange, onPosterClick }: MovieCardPr
           </div>
         </div>
 
-        {/* Genres */}
         <div className="flex flex-wrap gap-2 mb-4">
           {movie.genres.map((genre, idx) => (
             <span
@@ -394,7 +390,6 @@ function MovieCard({ movie, rating, onRatingChange, onPosterClick }: MovieCardPr
           ))}
         </div>
 
-        {/* Overview */}
         <div className="mb-6">
           <p className="text-gray-200 text-lg leading-relaxed">
             {displayOverview}
@@ -409,7 +404,6 @@ function MovieCard({ movie, rating, onRatingChange, onPosterClick }: MovieCardPr
           )}
         </div>
 
-        {/* Cast and Director */}
         <div className="space-y-3 mb-6">
           {movie.cast && movie.cast.length > 0 && (
             <div className="flex items-start gap-2">
@@ -435,7 +429,6 @@ function MovieCard({ movie, rating, onRatingChange, onPosterClick }: MovieCardPr
           )}
         </div>
 
-        {/* Rating slider */}
         <div className="bg-gray-900/80 backdrop-blur-sm rounded-2xl p-6 border border-gray-800">
           <label className="block text-white text-lg font-semibold mb-4">
             Your Rating: {rating ? `${rating.toFixed(1)} ★` : 'Not rated'}
@@ -460,7 +453,6 @@ function MovieCard({ movie, rating, onRatingChange, onPosterClick }: MovieCardPr
         </div>
       </div>
 
-      {/* Scroll indicator */}
       <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10 animate-bounce">
         <svg
           className="w-8 h-8 text-white/50"

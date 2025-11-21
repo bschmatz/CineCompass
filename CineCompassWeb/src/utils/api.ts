@@ -79,12 +79,6 @@ class ApiClient {
   async isOnboarded(): Promise<boolean> {
     return this.request<boolean>('/is-onboarded');
   }
-
-  async initSession(): Promise<{ session_id: string; has_finished_onboarding: boolean }> {
-    return this.request('/init-session', {
-      method: 'POST',
-    });
-  }
 }
 
 export const api = new ApiClient();

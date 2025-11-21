@@ -144,11 +144,10 @@ export function Onboarding() {
                         <button
                           key={value}
                           onClick={() => handleRating(movie.id, value)}
-                          className={`p-2 rounded-lg transition-all ${
-                            isSelected
+                          className={`p-2 rounded-lg transition-all ${isSelected
                               ? 'text-red-500 scale-110'
                               : 'text-gray-600 hover:text-red-400 hover:scale-105'
-                          }`}
+                            }`}
                         >
                           <svg
                             className="w-8 h-8"

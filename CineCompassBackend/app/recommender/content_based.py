@@ -13,6 +13,7 @@ from sqlalchemy import func
 from app.models.rating import Rating
 from app.models.cached_recommendation import CachedRecommendation
 from app.models.movie import Movie
+from app.models.user import User
 from app.schemas.rating import RatingCreate
 from app.schemas.recommendation import RecommendationResponse
 import pandas as pd
@@ -77,9 +78,8 @@ class CineCompassRecommender:
             features.append(f"director_{movie.director.lower()}" * 2)
 
         if movie.cast:
-            for i, actor in enumerate(movie.cast[:5]):
-                weight = 5 - i
-                features.extend([f"actor_{actor.lower()}" * weight])
+            for i, actor in enumerate(movie.cast[:3]): 
+                features.append(f"actor_{actor.lower()}")
 
         if movie.overview:
             cleaned_overview = movie.overview.lower()
@@ -201,27 +201,15 @@ class CineCompassRecommender:
                 **rec.details
             } for rec in recommendations]
 
-            diversity_score = self._calculate_diversity_score(rec_items)
-            if diversity_score < diversity_threshold:
-                alternative_recs = (self.db.query(CachedRecommendation)
-                                    .filter(CachedRecommendation.user_id == user_id)
-                                    .order_by(func.random())
-                                    .limit(expanded_page_size)
-                                    .all())
-
-                alt_items = [{
-                    "id": rec.movie_id,
-                    "similarity_score": rec.similarity_score,
-                    **rec.details
-                } for rec in alternative_recs]
-
-                rec_items = self._merge_recommendations(rec_items, alt_items, page_size)
-
-            rec_items = rec_items[:page_size]
+            # MMR Selection (Diversity)
+            if len(rec_items) > 0:
+                 rec_items = self._mmr_selection(rec_items, page_size)
 
             total = self.db.query(CachedRecommendation).filter(
                 CachedRecommendation.user_id == user_id
             ).count()
+            
+            diversity_score = self._calculate_diversity_score(rec_items)
 
             return RecommendationResponse(
                 items=rec_items,
@@ -233,6 +221,46 @@ class CineCompassRecommender:
         except Exception as e:
             logger.error(f"Error getting recommendations: {str(e)}")
             raise
+
+    def _mmr_selection(self, items: List[Dict], k: int, lambda_param: float = 0.7) -> List[Dict]:
+        if not items:
+            return []
+            
+        selected = [items[0]]
+        candidates = items[1:]
+        
+        while len(selected) < k and candidates:
+            best_score = -float('inf')
+            best_candidate_idx = -1
+            
+            for i, candidate in enumerate(candidates):
+                relevance = candidate.get('similarity_score', 0)
+                
+                max_sim_to_selected = 0
+                candidate_genres = set(candidate.get('genres', []))
+                
+                for sel in selected:
+                    sel_genres = set(sel.get('genres', []))
+                    if not candidate_genres or not sel_genres:
+                        sim = 0
+                    else:
+                        intersection = len(candidate_genres.intersection(sel_genres))
+                        union = len(candidate_genres.union(sel_genres))
+                        sim = intersection / union if union > 0 else 0
+                    max_sim_to_selected = max(max_sim_to_selected, sim)
+                
+                mmr_score = lambda_param * relevance - (1 - lambda_param) * max_sim_to_selected
+                
+                if mmr_score > best_score:
+                    best_score = mmr_score
+                    best_candidate_idx = i
+            
+            if best_candidate_idx != -1:
+                selected.append(candidates.pop(best_candidate_idx))
+            else:
+                selected.append(candidates.pop(0))
+                
+        return selected
 
     def _merge_recommendations(
             self,
@@ -275,26 +303,27 @@ class CineCompassRecommender:
                     rated_movie_indices.append(movie_idx)
 
                     days_old = (current_time - rating.timestamp).days
-                    time_weight = 1.0 / (1.0 + np.log1p(days_old))
+                    time_weight = 1.0 / (1.0 + np.log10(days_old + 1)) 
                     recent_weights.append(time_weight)
 
                     movie = self.movies_df.iloc[movie_idx]
-                    base_weight = rating.rating / 5.0
 
+                    raw_weight = rating.rating - 3.0
+                    
                     genre_boost = 1.0
                     director_boost = 1.0
+                    
+                    if raw_weight > 0:
+                        for genre in movie['details']['genres']:
+                            if genre in genre_prefs and genre_prefs[genre]['count'] >= 3:
+                                genre_boost += 0.2
+                        
+                        director = movie['details']['director']
+                        if director in director_prefs and director_prefs[director]['count'] >= 2:
+                            director_boost += 0.3
 
-                    for genre in movie['details']['genres']:
-                        if genre in genre_prefs and genre_prefs[genre]['count'] >= 3:
-                            genre_boost += 0.2 * (genre_prefs[genre]['avg_rating'] / 5.0)
-
-                    director = movie['details']['director']
-                    if director in director_prefs and director_prefs[director]['count'] >= 2:
-                        director_boost += 0.3 * (director_prefs[director]['avg_rating'] / 5.0)
-
-                    final_weight = base_weight * time_weight * genre_boost * director_boost
+                    final_weight = raw_weight * time_weight * genre_boost * director_boost
                     user_profile += self.tfidf_matrix[movie_idx].toarray()[0] * final_weight
-
                 except IndexError:
                     continue
 

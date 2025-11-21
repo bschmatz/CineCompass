@@ -16,22 +16,26 @@ router = APIRouter()
 def get_or_create_session(session_id: Optional[str] = Header(None, alias="X-Session-ID"), db: Session = Depends(get_db)) -> User:
     """Get existing session or create a new one"""
     if not session_id:
-        # Generate new session ID
         session_id = str(uuid.uuid4())
 
-    # Try to find existing session
     user = db.query(User).filter(User.session_id == session_id).first()
 
     if not user:
-        # Create new session
         user = User(
             session_id=session_id,
             created_at=datetime.utcnow(),
             last_session_refresh=datetime.utcnow()
         )
         db.add(user)
-        db.commit()
-        db.refresh(user)
+        db.add(user)
+        try:
+            db.commit()
+            db.refresh(user)
+        except Exception:
+            db.rollback()
+            user = db.query(User).filter(User.session_id == session_id).first()
+            if not user:
+                raise HTTPException(status_code=500, detail="Failed to create session")
 
     return user
 
@@ -59,7 +63,7 @@ async def refresh_session(
         db.commit()
 
         recommender = CineCompassRecommender(db)
-        recommender.update_recommendations(current_user.id)
+        await recommender.update_recommendations(current_user.id)
 
         return {"status": "success", "message": "Session refreshed and recommendations updated"}
     except Exception as e:

@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 
 interface SessionContextType {
   ratingsInCycle: number;
@@ -21,7 +21,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [cyclesCompleted, setCyclesCompleted] = useState(0);
   const [totalRatings, setTotalRatings] = useState(0);
 
-  // Load session data from localStorage on mount
   useEffect(() => {
     const savedData = localStorage.getItem(STORAGE_KEY);
     if (savedData) {
@@ -36,7 +35,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  // Save session data to localStorage whenever it changes
   useEffect(() => {
     const dataToSave = {
       ratingsInCycle,
