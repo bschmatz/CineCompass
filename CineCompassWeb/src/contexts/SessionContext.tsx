@@ -1,13 +1,17 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
+import { api } from '../utils/api';
 
 interface SessionContextType {
   ratingsInCycle: number;
   cyclesCompleted: number;
   totalRatings: number;
   isStudyComplete: boolean;
+  hasOnboarded: boolean;
+  isLoading: boolean;
   incrementRating: () => void;
   resetCycle: () => void;
   resetSession: () => void;
+  completeOnboarding: () => void;
 }
 
 const SessionContext = createContext<SessionContextType | undefined>(undefined);
@@ -20,12 +24,27 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const [ratingsInCycle, setRatingsInCycle] = useState(0);
   const [cyclesCompleted, setCyclesCompleted] = useState(0);
   const [totalRatings, setTotalRatings] = useState(0);
+  const [hasOnboarded, setHasOnboarded] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
+    const checkOnboardingStatus = async () => {
+      try {
+        const response = await api.getRecommendations(1, 1);
+        setHasOnboarded(response.items.length > 0);
+      } catch (error) {
+        console.error('Failed to check onboarding status:', error);
+        setHasOnboarded(false);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     const savedData = localStorage.getItem(STORAGE_KEY);
     if (savedData) {
       try {
         const parsed = JSON.parse(savedData);
+        console.log('Loaded session data:', parsed);
         setRatingsInCycle(parsed.ratingsInCycle || 0);
         setCyclesCompleted(parsed.cyclesCompleted || 0);
         setTotalRatings(parsed.totalRatings || 0);
@@ -33,6 +52,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         console.error('Failed to parse session data:', e);
       }
     }
+
+    checkOnboardingStatus();
   }, []);
 
   useEffect(() => {
@@ -56,10 +77,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setRatingsInCycle(0);
   };
 
+  const completeOnboarding = () => {
+    setHasOnboarded(true);
+  };
+
   const resetSession = () => {
     setRatingsInCycle(0);
     setCyclesCompleted(0);
     setTotalRatings(0);
+    setHasOnboarded(false);
     localStorage.removeItem(STORAGE_KEY);
   };
 
@@ -70,9 +96,12 @@ export function SessionProvider({ children }: { children: ReactNode }) {
         cyclesCompleted,
         totalRatings,
         isStudyComplete,
+        hasOnboarded,
+        isLoading,
         incrementRating,
         resetCycle,
         resetSession,
+        completeOnboarding,
       }}
     >
       {children}

@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { api } from '../utils/api';
 import type { Movie, MovieRating } from '../types';
+import { useSession } from '../contexts/SessionContext';
 
 const RATING_VALUES = [2, 4, 6, 8, 10];
 const MIN_RATINGS = 5;
 
 export function Onboarding() {
+  const { completeOnboarding } = useSession();
   const [movies, setMovies] = useState<Movie[]>([]);
   const [ratings, setRatings] = useState<Map<number, number>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const navigate = useNavigate();
 
   useEffect(() => {
     loadPopularMovies();
@@ -50,7 +50,7 @@ export function Onboarding() {
         ([movie_id, rating]) => ({ movie_id, rating })
       );
       await api.batchRateMovies(ratingArray);
-      navigate('/home');
+      completeOnboarding();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to submit ratings');
     } finally {
@@ -137,7 +137,7 @@ export function Onboarding() {
                   <p className="text-gray-400 text-sm line-clamp-3 mb-4">
                     {movie.overview}
                   </p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {RATING_VALUES.map((value) => {
                       const isSelected = ratings.get(movie.id) === value;
                       return (
@@ -145,8 +145,8 @@ export function Onboarding() {
                           key={value}
                           onClick={() => handleRating(movie.id, value)}
                           className={`p-2 rounded-lg transition-all ${isSelected
-                              ? 'text-red-500 scale-110'
-                              : 'text-gray-600 hover:text-red-400 hover:scale-105'
+                            ? 'text-red-500 scale-110'
+                            : 'text-gray-600 hover:text-red-400 hover:scale-105'
                             }`}
                         >
                           <svg

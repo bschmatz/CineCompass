@@ -63,7 +63,7 @@ async def refresh_session(
         db.commit()
 
         recommender = CineCompassRecommender(db)
-        await recommender.update_recommendations(current_user.id)
+        recommender.update_recommendations(current_user.id)
 
         return {"status": "success", "message": "Session refreshed and recommendations updated"}
     except Exception as e:
