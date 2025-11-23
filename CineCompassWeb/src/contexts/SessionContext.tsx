@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { api } from '../utils/api';
+import { clearSession } from '../utils/auth';
 
 interface SessionContextType {
   ratingsInCycle: number;
@@ -87,6 +88,7 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setTotalRatings(0);
     setHasOnboarded(false);
     localStorage.removeItem(STORAGE_KEY);
+    clearSession();
   };
 
   return (
